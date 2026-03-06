@@ -9,6 +9,7 @@
 
 import { useMemo } from 'react';
 import { parseCubicBezier, getEasingName, type CubicBezier } from '../utils/easingMap';
+import { colors, radius } from '../constants/designTokens';
 
 interface EasingCurveProps {
   /** The easing value (e.g., 'ease-in-out', 'cubic-bezier(0.16, 1, 0.3, 1)', 'power4.out') */
@@ -21,6 +22,8 @@ interface EasingCurveProps {
   showHandles?: boolean;
   /** Whether to show the linear reference line */
   showLinear?: boolean;
+  /** Custom accent color for the curve (defaults to theme accent) */
+  accentColor?: string;
 }
 
 /**
@@ -58,20 +61,16 @@ export default function EasingCurve({
   height = 100,
   showHandles = true,
   showLinear = true,
+  accentColor,
 }: EasingCurveProps) {
   const bezier = useMemo(() => parseCubicBezier(easing), [easing]);
   const easingName = useMemo(() => getEasingName(easing), [easing]);
 
-  // Colors matching the panel's dark theme
-  const colors = {
-    bg: '#1a1a1a',
-    grid: 'rgba(255, 255, 255, 0.06)',
-    linear: 'rgba(255, 255, 255, 0.15)',
-    curve: '#22c55e',
-    handle: 'rgba(34, 197, 94, 0.4)',
-    dot: '#22c55e',
-    text: '#9ca3af',
-  };
+  // Use provided accent color or default to theme accent
+  const curveColor = accentColor || colors.accent.primary;
+  const handleColor = accentColor
+    ? `${accentColor}66` // 40% opacity
+    : colors.accent.muted;
 
   // Padding for the curve area
   const padding = 8;
@@ -88,29 +87,29 @@ export default function EasingCurve({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: colors.bg,
-          borderRadius: '8px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          background: colors.bg.tertiary,
+          borderRadius: radius.lg,
+          border: `1px solid ${colors.border.default}`,
         }}
       >
         <div style={{ textAlign: 'center' }}>
           <div
             style={{
               fontSize: '10px',
-              color: colors.text,
+              color: colors.text.tertiary,
               marginBottom: '4px',
             }}
           >
-            Non-bezier easing
+            Non-bezier
           </div>
           <div
             style={{
-              fontSize: '11px',
-              color: '#ffffff',
-              fontFamily: '"Fira Code", monospace',
+              fontSize: '10px',
+              color: colors.text.secondary,
+              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
             }}
           >
-            {easing.length > 20 ? easing.slice(0, 18) + '...' : easing}
+            {easing.length > 16 ? easing.slice(0, 14) + '...' : easing}
           </div>
         </div>
       </div>
@@ -137,13 +136,13 @@ export default function EasingCurve({
         viewBox={`0 0 ${width} ${height}`}
         style={{
           display: 'block',
-          background: colors.bg,
-          borderRadius: '8px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          background: colors.bg.tertiary,
+          borderRadius: radius.lg,
+          border: `1px solid ${colors.border.default}`,
         }}
       >
         {/* Grid lines */}
-        <g stroke={colors.grid} strokeWidth="1">
+        <g stroke={colors.border.subtle} strokeWidth="1">
           {/* Vertical center */}
           <line x1={width / 2} y1={padding} x2={width / 2} y2={height - padding} />
           {/* Horizontal center */}
@@ -157,7 +156,7 @@ export default function EasingCurve({
             y1={height - padding}
             x2={width - padding}
             y2={padding}
-            stroke={colors.linear}
+            stroke={colors.border.default}
             strokeWidth="1"
             strokeDasharray="4,4"
           />
@@ -165,7 +164,7 @@ export default function EasingCurve({
 
         {/* Control point handles */}
         {showHandles && (
-          <g stroke={colors.handle} strokeWidth="1">
+          <g stroke={handleColor} strokeWidth="1">
             {/* P0 to P1 handle */}
             <line x1={padding} y1={height - padding} x2={p1.x} y2={p1.y} />
             {/* P2 to P3 handle */}
@@ -178,7 +177,7 @@ export default function EasingCurve({
           <path
             d={curvePath}
             fill="none"
-            stroke={colors.curve}
+            stroke={curveColor}
             strokeWidth="2"
             strokeLinecap="round"
           />
@@ -186,14 +185,14 @@ export default function EasingCurve({
 
         {/* Control points */}
         {showHandles && (
-          <g fill={colors.dot}>
+          <g fill={curveColor}>
             <circle cx={p1.x} cy={p1.y} r="3" />
             <circle cx={p2.x} cy={p2.y} r="3" />
           </g>
         )}
 
         {/* Start and end points */}
-        <g fill="#ffffff">
+        <g fill={colors.text.secondary}>
           <circle cx={padding} cy={height - padding} r="2" />
           <circle cx={width - padding} cy={padding} r="2" />
         </g>
@@ -206,11 +205,11 @@ export default function EasingCurve({
             position: 'absolute',
             bottom: '4px',
             right: '4px',
-            fontSize: '9px',
-            color: colors.text,
-            background: 'rgba(0, 0, 0, 0.6)',
-            padding: '2px 4px',
-            borderRadius: '3px',
+            fontSize: '8px',
+            color: colors.text.tertiary,
+            background: 'rgba(0, 0, 0, 0.5)',
+            padding: '1px 4px',
+            borderRadius: radius.sm,
           }}
         >
           {easingName}
@@ -226,11 +225,14 @@ export default function EasingCurve({
 export function EasingCurveCompact({
   easing,
   size = 32,
+  accentColor,
 }: {
   easing: string;
   size?: number;
+  accentColor?: string;
 }) {
   const bezier = useMemo(() => parseCubicBezier(easing), [easing]);
+  const curveColor = accentColor || colors.accent.primary;
 
   if (!bezier) {
     return (
@@ -241,10 +243,10 @@ export function EasingCurveCompact({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#1a1a1a',
-          borderRadius: '4px',
+          background: colors.bg.tertiary,
+          borderRadius: radius.sm,
           fontSize: '8px',
-          color: '#6b7280',
+          color: colors.text.disabled,
         }}
       >
         ?
@@ -263,15 +265,15 @@ export function EasingCurveCompact({
       viewBox={`0 0 ${size} ${size}`}
       style={{
         display: 'block',
-        background: '#1a1a1a',
-        borderRadius: '4px',
+        background: colors.bg.tertiary,
+        borderRadius: radius.sm,
       }}
     >
       <g transform={`translate(${padding}, ${padding})`}>
         <path
           d={curvePath}
           fill="none"
-          stroke="#22c55e"
+          stroke={curveColor}
           strokeWidth="1.5"
           strokeLinecap="round"
         />

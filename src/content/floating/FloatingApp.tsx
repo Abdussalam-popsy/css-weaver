@@ -5,7 +5,7 @@ import { highlightElement, clearHighlight } from '../highlighter';
 import { getCachedAnimations, hasCachedAnimations, setCachedAnimations, getPageDetectedAnimations } from '../animationCache';
 import { requestPageScan } from '../injected/inject';
 import { formatAnimationProperty, getCompleteCss } from '../../panel/utils/cssFormatting';
-import { getTypeLabel, getTypeColors } from '../../constants/animationTypes';
+import { colors, typography, radius, transitions, shadows, getTypeColorScheme, type TypeColorScheme } from '../../constants/designTokens';
 import EasingCurve from '../../components/EasingCurve';
 
 interface FloatingAppProps {
@@ -13,25 +13,23 @@ interface FloatingAppProps {
   onOpenTimeline?: () => void;
 }
 
-// Design tokens matching v1
-const colors = {
-  bg: '#1a1a1a',
-  panel: '#242424',
-  border: '#333333',
-  accent: '#22c55e',
-  accentHover: '#16a34a',
-  accentMuted: 'rgba(34, 197, 94, 0.15)',
-  accentBorder: 'rgba(34, 197, 94, 0.3)',
-  text: '#ffffff',
-  textMuted: '#9ca3af',
-  textDim: '#6b7280',
+// Type label mapping
+const TYPE_LABELS: Record<string, string> = {
+  'animation': 'CSS',
+  'transition': 'Trans',
+  'gsap': 'GSAP',
+  'web-animation': 'WAAPI',
+  'framer-motion': 'Framer',
+  'scroll-driven': 'Scroll',
 };
+
+function getTypeLabel(type: string): string {
+  return TYPE_LABELS[type] || type;
+}
 
 // Generate human-readable description of what the animation does
 function getAnimationDescription(anim: Animation): string {
   const parts: string[] = [];
-
-  // Describe the effect based on animation name or properties
   const name = anim.name.toLowerCase();
 
   if (name.includes('fade') || name.includes('opacity')) {
@@ -48,23 +46,12 @@ function getAnimationDescription(anim: Animation): string {
     parts.push('Shakes');
   } else if (name.includes('pulse') || name.includes('beat')) {
     parts.push('Pulses');
-  } else if (name.includes('float')) {
-    parts.push('Floats');
-  } else if (name.includes('glow')) {
-    parts.push('Glows');
   } else if (anim.type === 'transition') {
-    // For transitions, describe what property changes
     const prop = name.replace('transition: ', '');
     if (prop === 'all') {
-      parts.push('Smoothly transitions');
+      parts.push('Transitions');
     } else if (prop === 'transform') {
       parts.push('Transforms');
-    } else if (prop === 'background' || prop === 'background-color') {
-      parts.push('Changes background');
-    } else if (prop === 'color') {
-      parts.push('Changes color');
-    } else if (prop === 'opacity') {
-      parts.push('Fades');
     } else {
       parts.push(`Animates ${prop}`);
     }
@@ -72,7 +59,6 @@ function getAnimationDescription(anim: Animation): string {
     parts.push('Animates');
   }
 
-  // Add duration in human terms
   const duration = anim.duration;
   if (duration < 200) {
     parts.push('quickly');
@@ -84,33 +70,17 @@ function getAnimationDescription(anim: Animation): string {
     parts.push('slowly');
   }
 
-  // Add timing description
-  const timing = anim.timingFunction;
-  if (timing.includes('ease-in-out')) {
-    parts.push('with gentle start and end');
-  } else if (timing.includes('ease-out')) {
-    parts.push('with soft landing');
-  } else if (timing.includes('ease-in')) {
-    parts.push('with gradual start');
-  } else if (timing.includes('linear')) {
-    parts.push('at constant speed');
-  } else if (timing.includes('cubic-bezier')) {
-    parts.push('with custom curve');
-  }
-
   return parts.join(' ');
 }
 
-// Format duration for display
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-// Format timing function for display
 function formatTiming(timing: string): string {
   if (timing.startsWith('cubic-bezier')) {
-    return 'Custom curve';
+    return 'Custom';
   }
   return timing.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
@@ -127,37 +97,47 @@ function InspectTooltip({ animations, position }: {
       position: 'fixed',
       left: position.x + 12,
       top: position.y + 12,
-      background: colors.bg,
-      border: `1px solid ${colors.accent}`,
-      borderRadius: '8px',
-      padding: '10px 14px',
+      background: colors.bg.secondary,
+      border: `1px solid ${colors.accent.border}`,
+      borderRadius: radius.lg,
+      padding: '10px 12px',
       zIndex: 2147483647,
       pointerEvents: 'none',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-      maxWidth: '280px',
+      boxShadow: `${shadows.lg}, ${shadows.glow.accent}`,
+      maxWidth: '260px',
+      backdropFilter: 'blur(8px)',
     }}>
       {animations.map((anim, i) => {
-        const typeColors = getTypeColors(anim.type);
+        const scheme = getTypeColorScheme(anim.type);
         return (
           <div key={anim.id} style={{ marginBottom: i < animations.length - 1 ? '8px' : 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
               <span style={{
-                padding: '2px 6px',
-                borderRadius: '4px',
-                fontSize: '9px',
-                fontWeight: 600,
-                background: typeColors.bg,
-                color: typeColors.text,
-                border: `1px solid ${typeColors.border}`,
+                padding: '2px 5px',
+                borderRadius: radius.sm,
+                fontSize: typography.fontSize.xs,
+                fontWeight: typography.fontWeight.semibold,
+                background: scheme.bg,
+                color: scheme.color,
+                letterSpacing: typography.letterSpacing.wide,
+                textTransform: 'uppercase',
               }}>
                 {getTypeLabel(anim.type)}
               </span>
-              <span style={{ color: colors.text, fontWeight: 500, fontSize: '12px' }}>
-                {anim.name.length > 30 ? anim.name.slice(0, 30) + '...' : anim.name}
+              <span style={{
+                color: colors.text.primary,
+                fontWeight: typography.fontWeight.medium,
+                fontSize: typography.fontSize.base,
+              }}>
+                {anim.name.length > 24 ? anim.name.slice(0, 24) + '…' : anim.name}
               </span>
             </div>
-            <div style={{ color: colors.textDim, fontSize: '10px' }}>
-              {anim.duration}ms • {anim.timingFunction}
+            <div style={{
+              color: colors.text.tertiary,
+              fontSize: typography.fontSize.xs,
+              fontFamily: typography.fontFamily.mono,
+            }}>
+              {anim.duration}ms · {anim.timingFunction}
             </div>
           </div>
         );
@@ -165,11 +145,17 @@ function InspectTooltip({ animations, position }: {
       <div style={{
         marginTop: '8px',
         paddingTop: '8px',
-        borderTop: `1px solid ${colors.border}`,
-        color: colors.textMuted,
-        fontSize: '10px',
+        borderTop: `1px solid ${colors.border.default}`,
+        color: colors.text.tertiary,
+        fontSize: typography.fontSize.xs,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
       }}>
-        Click to select in panel
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M15 15l6 6m-11-4a7 7 0 110-14 7 7 0 010 14z" />
+        </svg>
+        Click to inspect
       </div>
     </div>
   );
@@ -184,56 +170,32 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'code'>('overview');
-
-  // Inspect mode state
   const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
   const [inspectTooltipAnims, setInspectTooltipAnims] = useState<Animation[]>([]);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
-  // Scan animations on mount - uses cached animations which includes GSAP, Framer Motion, etc.
+  // Scan animations on mount
   useEffect(() => {
     const loadAnimations = async () => {
-      // Check if we already have cached animations (includes GSAP, etc.)
       if (hasCachedAnimations()) {
         setAnimations(getCachedAnimations());
         setLoading(false);
         return;
       }
 
-      // Otherwise, trigger a fresh scan that includes page-detected animations
       try {
-        // Request page script to scan for GSAP animations
         await requestPageScan();
-
-        // Wait a bit for CustomEvents to arrive
         await new Promise(resolve => setTimeout(resolve, 250));
-
-        // Scan CSS animations
         const cssAnimations = scanAnimations();
-
-        // Get page-detected animations (GSAP, Framer Motion, etc.)
         const pageDetectedAnims = getPageDetectedAnimations();
-
-        // Merge, avoiding duplicates
         const pageAnims = pageDetectedAnims.filter(pageAnim =>
           !cssAnimations.some(cssAnim => cssAnim.id === pageAnim.id)
         );
-
         const allAnimations = [...cssAnimations, ...pageAnims];
-
-        // Cache for future use
         setCachedAnimations(allAnimations);
-
-        console.log('🎨 CSS Weaver Floating: Loaded animations', {
-          css: cssAnimations.length,
-          page: pageAnims.length,
-          total: allAnimations.length
-        });
-
         setAnimations(allAnimations);
       } catch (error) {
-        console.error('🎨 CSS Weaver Floating: Error loading animations', error);
-        // Fallback to CSS-only scan
+        console.error('CSS Weaver: Error loading animations', error);
         setAnimations(scanAnimations());
       }
       setLoading(false);
@@ -242,7 +204,7 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
     loadAnimations();
   }, []);
 
-  // Inspect mode: global hover handler
+  // Inspect mode handler
   useEffect(() => {
     if (!inspectModeEnabled) {
       setInspectTooltipAnims([]);
@@ -251,57 +213,40 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
 
     const handleMouseMove = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-
-      // Skip if hovering over the floating panel itself
       if (target.closest('#css-weaver-floating-root')) {
         setInspectTooltipAnims([]);
         return;
       }
 
-      // Find nearest element with animation data attribute
       const animatedEl = target.closest('[data-css-weaver-id]') as HTMLElement;
-
       if (animatedEl) {
         const animIds = animatedEl.dataset.cssWeaverId?.split(',') || [];
         const matchedAnims = animations.filter(a => animIds.includes(a.id));
-
         if (matchedAnims.length > 0) {
           setInspectTooltipAnims(matchedAnims);
           setTooltipPosition({ x: e.clientX, y: e.clientY });
-          // Also highlight the element
           highlightElement(matchedAnims[0].id);
         } else {
           setInspectTooltipAnims([]);
         }
       } else {
         setInspectTooltipAnims([]);
-        if (!selectedId) {
-          clearHighlight();
-        }
+        if (!selectedId) clearHighlight();
       }
     };
 
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+      if (target.closest('#css-weaver-floating-root')) return;
 
-      // Skip if clicking the floating panel itself
-      if (target.closest('#css-weaver-floating-root')) {
-        return;
-      }
-
-      // Find nearest element with animation data attribute
       const animatedEl = target.closest('[data-css-weaver-id]') as HTMLElement;
-
       if (animatedEl) {
         const animIds = animatedEl.dataset.cssWeaverId?.split(',') || [];
         const matchedAnims = animations.filter(a => animIds.includes(a.id));
-
         if (matchedAnims.length > 0) {
-          // Select the first animation
           setSelectedId(matchedAnims[0].id);
           setExpandedDetails(true);
           highlightElement(matchedAnims[0].id);
-          // Disable inspect mode after selection
           setInspectModeEnabled(false);
           e.preventDefault();
           e.stopPropagation();
@@ -311,8 +256,6 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('click', handleClick, true);
-
-    // Add visual cursor indicator
     document.body.style.cursor = 'crosshair';
 
     return () => {
@@ -323,23 +266,19 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
     };
   }, [inspectModeEnabled, animations, selectedId]);
 
-  // Get unique animation types for filter
   const animationTypes = useMemo(() => {
     const types = new Set(animations.map(a => a.type));
     return Array.from(types);
   }, [animations]);
 
-  // Filter animations
   const filteredAnimations = useMemo(() => {
     return animations.filter((anim) => {
       if (typeFilter !== 'all' && anim.type !== typeFilter) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        const description = getAnimationDescription(anim).toLowerCase();
         if (
           !anim.name.toLowerCase().includes(query) &&
           !anim.selector.toLowerCase().includes(query) &&
-          !description.includes(query) &&
           !anim.tagName.toLowerCase().includes(query)
         ) {
           return false;
@@ -349,14 +288,10 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
     });
   }, [animations, typeFilter, searchQuery]);
 
-  // Calculate timeline metrics
   const timelineMetrics = useMemo(() => {
     if (filteredAnimations.length === 0) return { maxDuration: 1000, totalDuration: 1000 };
     const maxEnd = Math.max(...filteredAnimations.map(a => a.endTime));
-    return {
-      maxDuration: maxEnd,
-      totalDuration: maxEnd,
-    };
+    return { maxDuration: maxEnd, totalDuration: maxEnd };
   }, [filteredAnimations]);
 
   const handleSelect = useCallback((anim: Animation) => {
@@ -368,7 +303,6 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
       setSelectedId(anim.id);
       setExpandedDetails(true);
       highlightElement(anim.id);
-      // Scroll to element
       const element = document.querySelector(`[data-css-weaver-id="${anim.id}"]`);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -395,37 +329,17 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
     clearHighlight();
 
     try {
-      // Request page script to scan for GSAP animations
       await requestPageScan();
-
-      // Wait for CustomEvents to arrive
       await new Promise(resolve => setTimeout(resolve, 250));
-
-      // Scan CSS animations
       const cssAnimations = scanAnimations();
-
-      // Get page-detected animations (GSAP, Framer Motion, etc.)
       const pageDetectedAnims = getPageDetectedAnimations();
-
-      // Merge, avoiding duplicates
       const pageAnims = pageDetectedAnims.filter(pageAnim =>
         !cssAnimations.some(cssAnim => cssAnim.id === pageAnim.id)
       );
-
       const allAnimations = [...cssAnimations, ...pageAnims];
-
-      // Cache for future use
       setCachedAnimations(allAnimations);
-
-      console.log('🎨 CSS Weaver Floating: Rescanned animations', {
-        css: cssAnimations.length,
-        page: pageAnims.length,
-        total: allAnimations.length
-      });
-
       setAnimations(allAnimations);
     } catch (error) {
-      console.error('🎨 CSS Weaver Floating: Error rescanning', error);
       setAnimations(scanAnimations());
     }
     setLoading(false);
@@ -439,24 +353,24 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
 
   const selectedAnimation = animations.find((a) => a.id === selectedId);
 
-  // Styles - refined for v2 (dark, minimal, precise)
+  // Refined styles using design tokens
   const styles = {
     container: {
       display: 'flex',
       flexDirection: 'column' as const,
       height: '100%',
-      background: colors.bg,
-      color: colors.text,
-      fontSize: '12px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-      letterSpacing: '-0.01em',
+      background: colors.bg.primary,
+      color: colors.text.primary,
+      fontSize: typography.fontSize.base,
+      fontFamily: typography.fontFamily.sans,
+      letterSpacing: typography.letterSpacing.normal,
     },
     toolbar: {
       display: 'flex',
       gap: '8px',
       padding: '10px 12px',
-      borderBottom: `1px solid ${colors.border}`,
-      background: colors.panel,
+      borderBottom: `1px solid ${colors.border.default}`,
+      background: colors.bg.secondary,
     },
     searchWrapper: {
       flex: 1,
@@ -467,108 +381,121 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
       left: '10px',
       top: '50%',
       transform: 'translateY(-50%)',
-      color: colors.textDim,
+      color: colors.text.disabled,
       pointerEvents: 'none' as const,
     },
     input: {
       width: '100%',
       padding: '8px 10px 8px 32px',
-      borderRadius: '8px',
-      border: `1px solid ${colors.border}`,
-      background: colors.bg,
-      color: colors.text,
-      fontSize: '12px',
+      borderRadius: radius.lg,
+      border: `1px solid ${colors.border.default}`,
+      background: colors.bg.tertiary,
+      color: colors.text.primary,
+      fontSize: typography.fontSize.base,
       outline: 'none',
-      transition: 'border-color 0.15s ease',
+      transition: transitions.fast,
     },
     select: {
       padding: '8px 10px',
-      borderRadius: '8px',
-      border: `1px solid ${colors.border}`,
-      background: colors.bg,
-      color: colors.text,
-      fontSize: '12px',
+      borderRadius: radius.lg,
+      border: `1px solid ${colors.border.default}`,
+      background: colors.bg.tertiary,
+      color: colors.text.primary,
+      fontSize: typography.fontSize.base,
       outline: 'none',
       cursor: 'pointer',
-      transition: 'border-color 0.15s ease',
+      transition: transitions.fast,
     },
     button: {
-      padding: '8px 14px',
-      borderRadius: '8px',
+      padding: '8px 12px',
+      borderRadius: radius.lg,
       border: 'none',
-      background: colors.accent,
-      color: colors.text,
-      fontSize: '12px',
-      fontWeight: 500,
+      background: colors.accent.primary,
+      color: '#ffffff',
+      fontSize: typography.fontSize.sm,
+      fontWeight: typography.fontWeight.medium,
       cursor: 'pointer',
-      transition: 'all 0.15s ease',
+      transition: transitions.fast,
       display: 'flex',
       alignItems: 'center',
-      gap: '6px',
+      gap: '5px',
+    },
+    buttonGhost: {
+      padding: '8px 12px',
+      borderRadius: radius.lg,
+      border: `1px solid ${colors.border.default}`,
+      background: 'transparent',
+      color: colors.text.secondary,
+      fontSize: typography.fontSize.sm,
+      fontWeight: typography.fontWeight.medium,
+      cursor: 'pointer',
+      transition: transitions.fast,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px',
     },
     stats: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '8px 12px',
-      borderBottom: `1px solid ${colors.border}`,
-      fontSize: '11px',
-      color: colors.textMuted,
+      padding: '6px 12px',
+      borderBottom: `1px solid ${colors.border.subtle}`,
+      fontSize: typography.fontSize.xs,
+      color: colors.text.tertiary,
     },
     list: {
       flex: 1,
       overflow: 'auto',
-      padding: '8px',
+      padding: '6px',
     },
-    item: (isSelected: boolean, typeColors: { bg: string; border: string }) => ({
-      marginBottom: '6px',
-      borderRadius: '10px',
-      background: isSelected ? typeColors.bg : colors.panel,
-      border: `1px solid ${isSelected ? typeColors.border : colors.border}`,
+    item: (isSelected: boolean, scheme: TypeColorScheme) => ({
+      marginBottom: '4px',
+      borderRadius: radius.lg,
+      background: isSelected ? scheme.bg : colors.bg.secondary,
+      border: `1px solid ${isSelected ? scheme.border : colors.border.subtle}`,
       cursor: 'pointer',
-      transition: 'all 0.15s ease',
+      transition: transitions.fast,
       overflow: 'hidden',
     }),
     itemHeader: {
       display: 'flex',
       alignItems: 'center',
-      gap: '10px',
+      gap: '8px',
       padding: '10px 12px',
     },
-    badge: (typeColors: { bg: string; text: string; border: string }) => ({
-      padding: '2px 6px',
-      borderRadius: '4px',
+    badge: (scheme: TypeColorScheme) => ({
+      padding: '2px 5px',
+      borderRadius: radius.sm,
       fontSize: '9px',
-      fontWeight: 600,
+      fontWeight: typography.fontWeight.semibold,
       textTransform: 'uppercase' as const,
-      letterSpacing: '0.03em',
-      background: typeColors.bg,
-      color: typeColors.text,
-      border: `1px solid ${typeColors.border}`,
+      letterSpacing: '0.04em',
+      background: scheme.bg,
+      color: scheme.color,
       whiteSpace: 'nowrap' as const,
     }),
     miniTimeline: {
-      height: '4px',
-      background: colors.bg,
-      borderRadius: '2px',
-      margin: '0 12px 10px 12px',
+      height: '3px',
+      background: colors.bg.primary,
+      borderRadius: '1.5px',
+      margin: '0 12px 8px 12px',
       position: 'relative' as const,
       overflow: 'hidden',
     },
     miniTimelineBar: (start: number, width: number, color: string) => ({
       position: 'absolute' as const,
       left: `${start}%`,
-      width: `${Math.max(width, 2)}%`,
+      width: `${Math.max(width, 3)}%`,
       height: '100%',
       background: color,
-      borderRadius: '2px',
+      borderRadius: '1.5px',
     }),
     details: {
-      borderTop: `1px solid ${colors.border}`,
-      background: colors.panel,
-      maxHeight: expandedDetails ? '280px' : '0',
+      borderTop: `1px solid ${colors.border.default}`,
+      background: colors.bg.secondary,
+      maxHeight: expandedDetails ? '300px' : '0',
       overflow: 'hidden',
-      transition: 'max-height 0.2s ease',
+      transition: 'max-height 0.25s ease',
     },
     detailsInner: {
       padding: '12px',
@@ -580,66 +507,66 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
     },
     tab: (isActive: boolean) => ({
       padding: '6px 12px',
-      borderRadius: '6px',
+      borderRadius: radius.md,
       border: 'none',
-      background: isActive ? colors.accentMuted : 'transparent',
-      color: isActive ? colors.accent : colors.textMuted,
-      fontSize: '11px',
-      fontWeight: 500,
+      background: isActive ? colors.accent.muted : 'transparent',
+      color: isActive ? colors.accent.primary : colors.text.tertiary,
+      fontSize: typography.fontSize.sm,
+      fontWeight: typography.fontWeight.medium,
       cursor: 'pointer',
-      transition: 'all 0.15s ease',
+      transition: transitions.fast,
     }),
     detailGrid: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
-      gap: '8px',
+      gap: '6px',
     },
     detailCard: {
-      padding: '10px',
-      borderRadius: '8px',
-      background: colors.bg,
-      border: `1px solid ${colors.border}`,
+      padding: '8px 10px',
+      borderRadius: radius.md,
+      background: colors.bg.tertiary,
+      border: `1px solid ${colors.border.subtle}`,
     },
     detailLabel: {
       fontSize: '9px',
-      color: colors.textDim,
-      marginBottom: '3px',
+      color: colors.text.disabled,
+      marginBottom: '2px',
       textTransform: 'uppercase' as const,
       letterSpacing: '0.06em',
-      fontWeight: 500,
+      fontWeight: typography.fontWeight.medium,
     },
     detailValue: {
-      fontSize: '14px',
-      color: colors.text,
-      fontWeight: 600,
-      lineHeight: 1.2,
+      fontSize: typography.fontSize.md,
+      color: colors.text.primary,
+      fontWeight: typography.fontWeight.semibold,
     },
     codeBlock: {
       padding: '12px',
-      background: colors.bg,
-      borderRadius: '8px',
-      border: `1px solid ${colors.border}`,
-      fontFamily: '"SF Mono", "Fira Code", "Monaco", "Consolas", monospace',
-      fontSize: '11px',
+      background: colors.bg.tertiary,
+      borderRadius: radius.lg,
+      border: `1px solid ${colors.border.subtle}`,
+      fontFamily: typography.fontFamily.mono,
+      fontSize: typography.fontSize.sm,
       whiteSpace: 'pre-wrap' as const,
       wordBreak: 'break-all' as const,
-      maxHeight: '160px',
+      maxHeight: '140px',
       overflow: 'auto',
-      lineHeight: 1.5,
-      color: '#e5e7eb',
+      lineHeight: typography.lineHeight.relaxed,
+      color: colors.text.secondary,
     },
     copyButton: (isCopied: boolean) => ({
-      padding: '6px 12px',
-      borderRadius: '6px',
-      border: `1px solid ${isCopied ? colors.accent : colors.border}`,
-      background: isCopied ? colors.accentMuted : 'transparent',
-      color: isCopied ? colors.accent : colors.textMuted,
-      fontSize: '11px',
+      padding: '6px 10px',
+      borderRadius: radius.md,
+      border: `1px solid ${isCopied ? colors.success.border : colors.border.default}`,
+      background: isCopied ? colors.success.muted : 'transparent',
+      color: isCopied ? colors.success.primary : colors.text.tertiary,
+      fontSize: typography.fontSize.xs,
+      fontWeight: typography.fontWeight.medium,
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
       gap: '4px',
-      transition: 'all 0.15s ease',
+      transition: transitions.fast,
     }),
     empty: {
       display: 'flex',
@@ -647,20 +574,20 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
       alignItems: 'center',
       justifyContent: 'center',
       height: '100%',
-      color: colors.textMuted,
+      color: colors.text.tertiary,
       textAlign: 'center' as const,
-      padding: '24px',
+      padding: '32px 24px',
     },
     emptyIcon: {
       width: '48px',
       height: '48px',
-      borderRadius: '12px',
-      background: colors.panel,
+      borderRadius: radius.xl,
+      background: colors.bg.tertiary,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: '12px',
-      color: colors.textDim,
+      marginBottom: '16px',
+      color: colors.text.disabled,
     },
   };
 
@@ -668,18 +595,19 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
     return (
       <div style={styles.container}>
         <div style={styles.empty}>
-          <div style={{
-            ...styles.emptyIcon,
-            animation: 'pulse 1.5s ease-in-out infinite',
-          }}>
+          <div style={{ ...styles.emptyIcon, animation: 'pulse 2s ease-in-out infinite' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="32">
                 <animate attributeName="stroke-dashoffset" values="32;0" dur="1s" repeatCount="indefinite" />
               </circle>
             </svg>
           </div>
-          <div style={{ fontWeight: 500, marginBottom: '4px' }}>Scanning for animations...</div>
-          <div style={{ fontSize: '11px', color: colors.textDim }}>Analyzing CSS, transitions, and libraries</div>
+          <div style={{ fontWeight: typography.fontWeight.medium, marginBottom: '4px', color: colors.text.secondary }}>
+            Scanning animations…
+          </div>
+          <div style={{ fontSize: typography.fontSize.sm, color: colors.text.tertiary }}>
+            Analyzing CSS, transitions & libraries
+          </div>
         </div>
       </div>
     );
@@ -696,84 +624,53 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
           </svg>
           <input
             type="text"
-            placeholder="Search animations..."
+            placeholder="Search…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={styles.input}
-            onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent.border; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = colors.border.default; }}
           />
         </div>
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
           style={styles.select}
-          onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = colors.accent.border; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = colors.border.default; }}
         >
-          <option value="all">All types</option>
+          <option value="all">All</option>
           {animationTypes.map(type => (
             <option key={type} value={type}>{getTypeLabel(type)}</option>
           ))}
         </select>
         <button
-          onClick={() => setInspectModeEnabled(!inspectModeEnabled)}
-          style={{
-            ...styles.button,
-            background: inspectModeEnabled ? colors.accent : 'transparent',
-            border: `1px solid ${inspectModeEnabled ? colors.accent : colors.border}`,
-            color: inspectModeEnabled ? colors.text : colors.textMuted,
-          }}
-          onMouseEnter={(e) => {
-            if (!inspectModeEnabled) {
-              e.currentTarget.style.borderColor = colors.accent;
-              e.currentTarget.style.color = colors.accent;
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!inspectModeEnabled) {
-              e.currentTarget.style.borderColor = colors.border;
-              e.currentTarget.style.color = colors.textMuted;
-            }
-          }}
-          title={inspectModeEnabled ? 'Disable Inspect Mode' : 'Enable Inspect Mode - hover over elements to see animations'}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="22" y1="12" x2="18" y2="12" />
-            <line x1="6" y1="12" x2="2" y2="12" />
-            <line x1="12" y1="6" x2="12" y2="2" />
-            <line x1="12" y1="22" x2="12" y2="18" />
-          </svg>
-          {inspectModeEnabled ? 'Inspecting' : 'Inspect'}
-        </button>
-        <button
           onClick={handleRescan}
           style={styles.button}
-          onMouseEnter={(e) => { e.currentTarget.style.background = colors.accentHover; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = colors.accent; }}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
             <path d="M21 3v5h-5" />
           </svg>
-          Rescan
+          Scan
         </button>
       </div>
 
       {/* Stats bar */}
       <div style={styles.stats}>
         <span>
-          <strong style={{ color: colors.text }}>{filteredAnimations.length}</strong>
+          <strong style={{ color: colors.text.secondary }}>{filteredAnimations.length}</strong>
           {' '}of {animations.length} animations
         </span>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '10px' }}>
           {animationTypes.slice(0, 3).map(type => {
             const count = animations.filter(a => a.type === type).length;
-            const typeColors = getTypeColors(type);
+            const scheme = getTypeColorScheme(type);
             return (
-              <span key={type} style={{ color: typeColors.text }}>
-                {count} {getTypeLabel(type).toLowerCase()}
+              <span key={type} style={{ color: scheme.color }}>
+                {count} {getTypeLabel(type)}
               </span>
             );
           })}
@@ -786,11 +683,9 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
           <div style={styles.empty}>
             <div style={styles.emptyIcon}>
               {animations.length === 0 ? (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M8 15s1.5 2 4 2 4-2 4-2" />
-                  <line x1="9" y1="9" x2="9.01" y2="9" />
-                  <line x1="15" y1="9" x2="15.01" y2="9" />
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 9h18M9 21V9" />
                 </svg>
               ) : (
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -799,10 +694,10 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
                 </svg>
               )}
             </div>
-            <div style={{ fontWeight: 500, marginBottom: '4px' }}>
+            <div style={{ fontWeight: typography.fontWeight.medium, marginBottom: '4px', color: colors.text.secondary }}>
               {animations.length === 0 ? 'No animations found' : 'No matches'}
             </div>
-            <div style={{ fontSize: '11px', color: colors.textDim, marginBottom: '12px' }}>
+            <div style={{ fontSize: typography.fontSize.sm, marginBottom: '16px' }}>
               {animations.length === 0
                 ? 'This page doesn\'t have any CSS animations'
                 : 'Try adjusting your search or filter'}
@@ -810,9 +705,9 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
             {animations.length === 0 && (
               <button
                 onClick={handleRescan}
-                style={{ ...styles.button, padding: '8px 16px' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = colors.accentHover; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = colors.accent; }}
+                style={styles.button}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
               >
                 Rescan Page
               </button>
@@ -820,7 +715,7 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
           </div>
         ) : (
           filteredAnimations.map((anim) => {
-            const typeColors = getTypeColors(anim.type);
+            const scheme = getTypeColorScheme(anim.type);
             const isSelected = selectedId === anim.id;
             const timelineStart = (anim.startTime / timelineMetrics.totalDuration) * 100;
             const timelineWidth = ((anim.endTime - anim.startTime) / timelineMetrics.totalDuration) * 100;
@@ -828,34 +723,47 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
             return (
               <div
                 key={anim.id}
-                style={styles.item(isSelected, typeColors)}
+                style={styles.item(isSelected, scheme)}
                 onClick={() => handleSelect(anim)}
-                onMouseEnter={() => handleHover(anim)}
-                onMouseLeave={handleHoverEnd}
+                onMouseEnter={(e) => {
+                  handleHover(anim);
+                  if (!isSelected) {
+                    e.currentTarget.style.borderColor = colors.border.strong;
+                    e.currentTarget.style.background = colors.bg.tertiary;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  handleHoverEnd();
+                  if (!isSelected) {
+                    e.currentTarget.style.borderColor = colors.border.subtle;
+                    e.currentTarget.style.background = colors.bg.secondary;
+                  }
+                }}
               >
                 <div style={styles.itemHeader}>
-                  <span style={styles.badge(typeColors)}>
+                  <span style={styles.badge(scheme)}>
                     {getTypeLabel(anim.type)}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontWeight: 500,
-                      fontSize: '12px',
+                      fontWeight: typography.fontWeight.medium,
+                      fontSize: typography.fontSize.base,
                       marginBottom: '2px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
+                      color: colors.text.primary,
                     }}>
                       {anim.tagName.toLowerCase()}
                       {anim.selector.includes('.') && (
-                        <span style={{ color: colors.textMuted, fontWeight: 400 }}>
+                        <span style={{ color: colors.text.tertiary, fontWeight: typography.fontWeight.normal }}>
                           .{anim.selector.split('.').pop()?.split(/[\s:[\]>+~]/)[0]}
                         </span>
                       )}
                     </div>
                     <div style={{
-                      fontSize: '11px',
-                      color: colors.textDim,
+                      fontSize: typography.fontSize.sm,
+                      color: colors.text.disabled,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -865,23 +773,22 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
                   </div>
                   <div style={{
                     textAlign: 'right',
-                    fontSize: '11px',
-                    color: colors.textMuted,
+                    fontSize: typography.fontSize.sm,
+                    color: colors.text.tertiary,
                     whiteSpace: 'nowrap',
                   }}>
-                    <div style={{ fontWeight: 500, color: colors.text }}>
+                    <div style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.secondary }}>
                       {formatDuration(anim.duration)}
                     </div>
                     {anim.delay > 0 && (
-                      <div style={{ fontSize: '10px' }}>
-                        +{formatDuration(anim.delay)} delay
+                      <div style={{ fontSize: typography.fontSize.xs, color: colors.text.disabled }}>
+                        +{formatDuration(anim.delay)}
                       </div>
                     )}
                   </div>
                 </div>
-                {/* Mini timeline bar */}
                 <div style={styles.miniTimeline}>
-                  <div style={styles.miniTimelineBar(timelineStart, timelineWidth, typeColors.text)} />
+                  <div style={styles.miniTimelineBar(timelineStart, timelineWidth, scheme.color)} />
                 </div>
               </div>
             );
@@ -893,7 +800,6 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
       <div style={styles.details}>
         {selectedAnimation && (
           <div style={styles.detailsInner}>
-            {/* Tabs */}
             <div style={styles.tabs}>
               <button
                 style={styles.tab(activeTab === 'overview')}
@@ -912,25 +818,24 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
                 style={styles.copyButton(copiedId === selectedAnimation.id)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Use type-aware formatting for the copy
                   const code = getCompleteCss(selectedAnimation);
                   handleCopy(code, selectedAnimation.id);
                 }}
               >
                 {copiedId === selectedAnimation.id ? (
                   <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    Copied!
+                    Copied
                   </>
                 ) : (
                   <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <rect x="9" y="9" width="13" height="13" rx="2" />
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                     </svg>
-                    Copy Code
+                    Copy
                   </>
                 )}
               </button>
@@ -938,18 +843,15 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
 
             {activeTab === 'overview' ? (
               <div style={{ display: 'flex', gap: '12px' }}>
-                {/* Easing curve visualization */}
                 <div style={{ flexShrink: 0 }}>
                   <EasingCurve
                     easing={selectedAnimation.timingFunction}
-                    width={90}
-                    height={90}
+                    width={80}
+                    height={80}
                     showHandles={true}
                     showLinear={true}
                   />
                 </div>
-
-                {/* Timing info grid */}
                 <div style={{ ...styles.detailGrid, flex: 1 }}>
                   <div style={styles.detailCard}>
                     <div style={styles.detailLabel}>Duration</div>
@@ -962,32 +864,13 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
                   <div style={styles.detailCard}>
                     <div style={styles.detailLabel}>Iterations</div>
                     <div style={styles.detailValue}>
-                      {selectedAnimation.iterationCount === 'infinite' ? 'Infinite' : selectedAnimation.iterationCount}
+                      {selectedAnimation.iterationCount === 'infinite' ? '∞' : selectedAnimation.iterationCount}
                     </div>
                   </div>
                   <div style={styles.detailCard}>
                     <div style={styles.detailLabel}>Easing</div>
-                    <div style={{
-                      ...styles.detailValue,
-                      fontSize: '11px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
+                    <div style={{ ...styles.detailValue, fontSize: typography.fontSize.sm }}>
                       {formatTiming(selectedAnimation.timingFunction)}
-                    </div>
-                  </div>
-                  <div style={{ ...styles.detailCard, gridColumn: '1 / -1' }}>
-                    <div style={styles.detailLabel}>Element</div>
-                    <div style={{
-                      ...styles.detailValue,
-                      fontFamily: '"Fira Code", monospace',
-                      fontSize: '11px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {selectedAnimation.selector}
                     </div>
                   </div>
                 </div>
@@ -1003,7 +886,6 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
         )}
       </div>
 
-      {/* Inspect mode tooltip - rendered outside panel but in shadow DOM */}
       {inspectModeEnabled && inspectTooltipAnims.length > 0 && (
         <InspectTooltip animations={inspectTooltipAnims} position={tooltipPosition} />
       )}

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, type WheelEvent as ReactWheelEvent } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { colors, shadows, radius, transitions, typography } from '../../constants/designTokens';
 
 interface FloatingPanelProps {
   children: React.ReactNode;
@@ -18,24 +19,11 @@ interface Size {
   height: number;
 }
 
-const DEFAULT_SIZE: Size = { width: 420, height: 520 };
-const MIN_SIZE: Size = { width: 320, height: 380 };
-const COLLAPSED_SIZE: Size = { width: 48, height: 48 };
+const DEFAULT_SIZE: Size = { width: 400, height: 540 };
+const MIN_SIZE: Size = { width: 340, height: 400 };
+const COLLAPSED_SIZE: Size = { width: 44, height: 44 };
 
-// Design tokens matching v1
-const colors = {
-  bg: '#1a1a1a',
-  panel: '#242424',
-  border: '#333333',
-  accent: '#22c55e',
-  accentHover: '#16a34a',
-  accentMuted: 'rgba(34, 197, 94, 0.15)',
-  text: '#ffffff',
-  textMuted: '#9ca3af',
-  textDim: '#6b7280',
-};
-
-export default function FloatingPanel({ children, onClose, onOpenTimeline, inspectModeEnabled, onToggleInspectMode }: FloatingPanelProps) {
+export default function FloatingPanel({ children, onClose, inspectModeEnabled, onToggleInspectMode }: FloatingPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [position, setPosition] = useState<Position>(() => {
     const saved = localStorage.getItem('css-weaver-position');
@@ -47,8 +35,8 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
       }
     }
     return {
-      x: window.innerWidth - DEFAULT_SIZE.width - 20,
-      y: window.innerHeight - DEFAULT_SIZE.height - 20,
+      x: window.innerWidth - DEFAULT_SIZE.width - 24,
+      y: window.innerHeight - DEFAULT_SIZE.height - 24,
     };
   });
   const [size, setSize] = useState<Size>(() => {
@@ -120,17 +108,14 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
     };
   }, [handleMouseMove, handleMouseUp]);
 
-  // Prevent scroll propagation to the page using native event listener
-  // This is needed because React's onWheel doesn't work with passive: false
+  // Prevent scroll propagation to the page
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
 
     const preventScrollPropagation = (e: WheelEvent) => {
-      // Find the scrollable element within the panel
       const scrollableElement = panel.querySelector('[data-scrollable]') as HTMLElement;
       if (!scrollableElement) {
-        // If there's no scrollable element, just stop propagation
         e.stopPropagation();
         return;
       }
@@ -141,13 +126,10 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
       const isScrollingUp = e.deltaY < 0;
       const isScrollingDown = e.deltaY > 0;
 
-      // Allow scrolling within the panel, but prevent propagation to page
-      // If at boundaries, prevent default to stop page scroll
       if ((isAtTop && isScrollingUp) || (isAtBottom && isScrollingDown)) {
         e.preventDefault();
       }
 
-      // Always stop propagation to prevent page from receiving the event
       e.stopPropagation();
     };
 
@@ -163,20 +145,11 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
     e.stopPropagation();
   }, []);
 
-  /**
-   * Prevent scroll events from propagating to the page
-   * This fixes the issue where scrolling in the floating panel scrolls the page
-   */
-  const handleWheel = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
-    // Stop the event from propagating to the page
-    e.stopPropagation();
-  }, []);
-
   const toggleCollapse = useCallback(() => {
     setIsCollapsed(!isCollapsed);
   }, [isCollapsed]);
 
-  // Collapsed state - show branded icon
+  // Collapsed state - show branded floating button
   if (isCollapsed) {
     return (
       <div
@@ -197,32 +170,34 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
           style={{
             width: '100%',
             height: '100%',
-            borderRadius: '12px',
-            border: `2px solid ${colors.accent}`,
-            background: colors.bg,
-            color: colors.accent,
+            borderRadius: radius.xl,
+            border: `1px solid ${colors.border.strong}`,
+            background: `linear-gradient(145deg, ${colors.bg.secondary}, ${colors.bg.primary})`,
+            color: colors.accent.primary,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: `0 4px 24px rgba(34, 197, 94, 0.3), 0 0 0 1px ${colors.border}`,
-            transition: 'all 0.2s ease',
+            boxShadow: `${shadows.lg}, ${shadows.glow.accent}`,
+            transition: transitions.normal,
           }}
           title="Expand CSS Weaver"
           onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = `0 4px 32px rgba(34, 197, 94, 0.5), 0 0 0 1px ${colors.accent}`;
+            e.currentTarget.style.boxShadow = `${shadows.xl}, 0 0 30px rgba(129, 140, 248, 0.3)`;
             e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.borderColor = colors.accent.primary;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = `0 4px 24px rgba(34, 197, 94, 0.3), 0 0 0 1px ${colors.border}`;
+            e.currentTarget.style.boxShadow = `${shadows.lg}, ${shadows.glow.accent}`;
             e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.borderColor = colors.border.strong;
           }}
         >
-          {/* CSS Weaver Logo - staggered bars */}
-          <svg width="24" height="24" viewBox="0 0 24 24">
-            <rect x="2" y="6" width="8" height="3" rx="1.5" fill="currentColor" />
-            <rect x="5" y="11" width="10" height="3" rx="1.5" fill="currentColor" />
-            <rect x="8" y="16" width="8" height="3" rx="1.5" fill="currentColor" />
+          {/* CSS Weaver Logo - refined staggered bars */}
+          <svg width="22" height="22" viewBox="0 0 24 24">
+            <rect x="3" y="5" width="7" height="2.5" rx="1.25" fill="currentColor" opacity="0.7" />
+            <rect x="6" y="10.5" width="9" height="2.5" rx="1.25" fill="currentColor" opacity="0.85" />
+            <rect x="9" y="16" width="7" height="2.5" rx="1.25" fill="currentColor" />
           </svg>
         </button>
       </div>
@@ -232,7 +207,6 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
   return (
     <div
       ref={panelRef}
-      onWheel={handleWheel}
       style={{
         position: 'fixed',
         left: `${position.x}px`,
@@ -242,11 +216,12 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
         zIndex: 2147483647,
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: '12px',
+        borderRadius: radius['2xl'],
         overflow: 'hidden',
-        boxShadow: `0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px ${colors.border}, 0 0 60px rgba(34, 197, 94, 0.1)`,
-        background: colors.bg,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        boxShadow: shadows.panel,
+        background: colors.bg.primary,
+        fontFamily: typography.fontFamily.sans,
+        border: `1px solid ${colors.border.subtle}`,
       }}
     >
       {/* Title bar - draggable */}
@@ -256,57 +231,75 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '10px 12px',
-          background: colors.panel,
-          borderBottom: `1px solid ${colors.border}`,
+          padding: '10px 14px',
+          background: colors.bg.secondary,
+          borderBottom: `1px solid ${colors.border.default}`,
           cursor: 'move',
           userSelect: 'none',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Logo - staggered bars */}
-          <svg width="20" height="20" viewBox="0 0 24 24" style={{ color: colors.accent }}>
-            <rect x="2" y="6" width="8" height="3" rx="1.5" fill="currentColor" />
-            <rect x="5" y="11" width="10" height="3" rx="1.5" fill="currentColor" />
-            <rect x="8" y="16" width="8" height="3" rx="1.5" fill="currentColor" />
-          </svg>
-          <span style={{ color: colors.text, fontWeight: 600, fontSize: '13px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Logo - animated gradient feel */}
+          <div style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: radius.md,
+            background: `linear-gradient(135deg, ${colors.accent.muted}, transparent)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" style={{ color: colors.accent.primary }}>
+              <rect x="3" y="5" width="7" height="2.5" rx="1.25" fill="currentColor" opacity="0.7" />
+              <rect x="6" y="10.5" width="9" height="2.5" rx="1.25" fill="currentColor" opacity="0.85" />
+              <rect x="9" y="16" width="7" height="2.5" rx="1.25" fill="currentColor" />
+            </svg>
+          </div>
+          <span style={{
+            color: colors.text.primary,
+            fontWeight: typography.fontWeight.semibold,
+            fontSize: typography.fontSize.md,
+            letterSpacing: typography.letterSpacing.tight,
+          }}>
             CSS Weaver
           </span>
         </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {/* Inspect Mode toggle */}
           {onToggleInspectMode && (
             <button
               onClick={onToggleInspectMode}
               style={{
-                padding: '5px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${inspectModeEnabled ? colors.accent : colors.border}`,
-                background: inspectModeEnabled ? colors.accentMuted : 'transparent',
-                color: inspectModeEnabled ? colors.accent : colors.textMuted,
+                padding: '6px 10px',
+                borderRadius: radius.md,
+                border: `1px solid ${inspectModeEnabled ? colors.accent.border : colors.border.default}`,
+                background: inspectModeEnabled ? colors.accent.muted : 'transparent',
+                color: inspectModeEnabled ? colors.accent.primary : colors.text.tertiary,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                fontSize: '11px',
-                transition: 'all 0.15s ease',
+                gap: '5px',
+                fontSize: typography.fontSize.sm,
+                fontWeight: typography.fontWeight.medium,
+                transition: transitions.fast,
               }}
-              title={inspectModeEnabled ? 'Disable Inspect Mode' : 'Enable Inspect Mode - hover over elements to see animations'}
+              title={inspectModeEnabled ? 'Disable Inspect Mode' : 'Enable Inspect Mode'}
               onMouseEnter={(e) => {
                 if (!inspectModeEnabled) {
-                  e.currentTarget.style.borderColor = colors.accent;
-                  e.currentTarget.style.color = colors.accent;
+                  e.currentTarget.style.borderColor = colors.accent.border;
+                  e.currentTarget.style.color = colors.accent.primary;
+                  e.currentTarget.style.background = colors.accent.muted;
                 }
               }}
               onMouseLeave={(e) => {
                 if (!inspectModeEnabled) {
-                  e.currentTarget.style.borderColor = colors.border;
-                  e.currentTarget.style.color = colors.textMuted;
+                  e.currentTarget.style.borderColor = colors.border.default;
+                  e.currentTarget.style.color = colors.text.tertiary;
+                  e.currentTarget.style.background = 'transparent';
                 }
               }}
             >
-              {/* Crosshair/Target icon for inspect mode */}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="22" y1="12" x2="18" y2="12" />
@@ -317,99 +310,72 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
               Inspect
             </button>
           )}
-          {/* Open Timeline button */}
-          {onOpenTimeline && (
+
+          {/* Window controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            {/* Minimize button */}
             <button
-              onClick={onOpenTimeline}
+              onClick={toggleCollapse}
               style={{
-                padding: '5px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.border}`,
+                width: '28px',
+                height: '28px',
+                borderRadius: radius.md,
+                border: 'none',
                 background: 'transparent',
-                color: colors.textMuted,
+                color: colors.text.tertiary,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                fontSize: '11px',
-                transition: 'all 0.15s ease',
+                justifyContent: 'center',
+                transition: transitions.fast,
               }}
-              title="Open full Timeline View"
+              title="Minimize"
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = colors.accent;
-                e.currentTarget.style.color = colors.accent;
+                e.currentTarget.style.background = colors.bg.elevated;
+                e.currentTarget.style.color = colors.text.secondary;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = colors.border;
-                e.currentTarget.style.color = colors.textMuted;
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = colors.text.tertiary;
               }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9h18" />
-                <path d="M9 21V9" />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
-              Timeline
             </button>
-          )}
-          {/* Minimize button */}
-          <button
-            onClick={toggleCollapse}
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '6px',
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: colors.textMuted,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '16px',
-              transition: 'all 0.15s ease',
-            }}
-            title="Minimize"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = colors.accent;
-              e.currentTarget.style.color = colors.accent;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = colors.border;
-              e.currentTarget.style.color = colors.textMuted;
-            }}
-          >
-            −
-          </button>
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '6px',
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: colors.textMuted,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '16px',
-              transition: 'all 0.15s ease',
-            }}
-            title="Close"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#ef4444';
-              e.currentTarget.style.color = '#ef4444';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = colors.border;
-              e.currentTarget.style.color = colors.textMuted;
-            }}
-          >
-            ×
-          </button>
+
+            {/* Close button */}
+            <button
+              onClick={onClose}
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: radius.md,
+                border: 'none',
+                background: 'transparent',
+                color: colors.text.tertiary,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: transitions.fast,
+              }}
+              title="Close"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = colors.error.muted;
+                e.currentTarget.style.color = colors.error.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = colors.text.tertiary;
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -426,22 +392,22 @@ export default function FloatingPanel({ children, onClose, onOpenTimeline, inspe
           position: 'absolute',
           right: 0,
           bottom: 0,
-          width: '20px',
-          height: '20px',
+          width: '16px',
+          height: '16px',
           cursor: 'se-resize',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: 0.5,
-          transition: 'opacity 0.15s ease',
+          opacity: 0.3,
+          transition: transitions.fast,
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.7'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.3'; }}
       >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill={colors.textDim}>
-          <circle cx="10" cy="10" r="1.5" />
-          <circle cx="6" cy="10" r="1.5" />
-          <circle cx="10" cy="6" r="1.5" />
+        <svg width="10" height="10" viewBox="0 0 10 10" fill={colors.text.disabled}>
+          <circle cx="8" cy="8" r="1.2" />
+          <circle cx="4.5" cy="8" r="1.2" />
+          <circle cx="8" cy="4.5" r="1.2" />
         </svg>
       </div>
     </div>
