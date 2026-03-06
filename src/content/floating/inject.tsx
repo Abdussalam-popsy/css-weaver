@@ -1,6 +1,28 @@
 import { createRoot, Root } from 'react-dom/client';
+import { useState } from 'react';
 import FloatingPanel from './FloatingPanel';
 import FloatingApp from './FloatingApp';
+
+/**
+ * Wrapper component to manage inspect mode state and pass to both Panel and App
+ */
+function FloatingPanelWrapper({ onClose }: { onClose: () => void }) {
+  const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
+
+  return (
+    <FloatingPanel
+      onClose={onClose}
+      inspectModeEnabled={inspectModeEnabled}
+      onToggleInspectMode={() => setInspectModeEnabled(!inspectModeEnabled)}
+    >
+      <FloatingApp
+        onClose={onClose}
+        inspectModeEnabled={inspectModeEnabled}
+        onInspectModeChange={setInspectModeEnabled}
+      />
+    </FloatingPanel>
+  );
+}
 
 let container: HTMLDivElement | null = null;
 let shadowRoot: ShadowRoot | null = null;
@@ -173,9 +195,7 @@ export function showFloatingPanel(): void {
   root = createRoot(mountPoint);
   // Note: Timeline panel disabled for v2 MVP - keeping files for future v2.1
   root.render(
-    <FloatingPanel onClose={hideFloatingPanel}>
-      <FloatingApp onClose={hideFloatingPanel} />
-    </FloatingPanel>
+    <FloatingPanelWrapper onClose={hideFloatingPanel} />
   );
 
   isVisible = true;
@@ -183,7 +203,7 @@ export function showFloatingPanel(): void {
 }
 
 /**
- * Hide the floating panel
+ * Hide the floating panel and reload the page to restore original state
  */
 export function hideFloatingPanel(): void {
   if (!isVisible || !root) return;
@@ -193,7 +213,10 @@ export function hideFloatingPanel(): void {
   root = null;
   isVisible = false;
 
-  console.log('🎨 CSS Weaver: Floating panel hidden');
+  console.log('🎨 CSS Weaver: Floating panel hidden, reloading page...');
+
+  // Reload page to restore original animation state
+  window.location.reload();
 }
 
 /**

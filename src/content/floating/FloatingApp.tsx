@@ -12,11 +12,13 @@ import EasingCurve from '../../components/EasingCurve';
 interface FloatingAppProps {
   onClose: () => void;
   onOpenTimeline?: () => void;
+  inspectModeEnabled?: boolean;
+  onInspectModeChange?: (enabled: boolean) => void;
 }
 
 // Type label mapping
 const TYPE_LABELS: Record<string, string> = {
-  'animation': 'CSS',
+  'animation': 'Keyframes',
   'transition': 'Trans',
   'gsap': 'GSAP',
   'web-animation': 'WAAPI',
@@ -490,7 +492,11 @@ function ComputedStylesTab({ context, onCopy }: { context: ElementContext; onCop
   );
 }
 
-export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
+export default function FloatingApp({
+  onClose: _onClose,
+  inspectModeEnabled: inspectModeEnabledProp = false,
+  onInspectModeChange,
+}: FloatingAppProps) {
   const [animations, setAnimations] = useState<Animation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -499,7 +505,10 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'code' | 'html' | 'styles'>('overview');
-  const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
+  // Use controlled state from parent if available, otherwise internal state
+  const [inspectModeEnabledInternal, setInspectModeEnabledInternal] = useState(false);
+  const inspectModeEnabled = onInspectModeChange ? inspectModeEnabledProp : inspectModeEnabledInternal;
+  const setInspectModeEnabled = onInspectModeChange || setInspectModeEnabledInternal;
   const [inspectTooltipAnims, setInspectTooltipAnims] = useState<Animation[]>([]);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
