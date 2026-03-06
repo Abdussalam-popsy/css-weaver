@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.2s ease-out;
+}
+
+/* Prism.js CSS Theme for CSS Weaver */
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #e5e5e5;
+  background: none;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+pre[class*="language-"] {
+  background: #1a1a1a;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+/* Syntax highlighting tokens */
+.token.selector,
+.token.atrule,
+.token.atrule .keyword {
+  color: #22c55e; /* weaver-accent green */
+}
+
+.token.property {
+  color: #60a5fa; /* blue */
+}
+
+.token.punctuation {
+  color: #9ca3af;
+}
+
+.token.string,
+.token.attr-value {
+  color: #fbbf24; /* yellow/amber */
+}
+
+.token.number,
+.token.unit {
+  color: #c084fc; /* purple */
+}
+
+.token.function,
+.token.url {
+  color: #34d399; /* teal */
+}
+
+.token.keyword {
+  color: #f472b6; /* pink */
+}
+
+.token.comment {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.token.important {
+  color: #ef4444;
+}
+
+/* Line highlighting for current keyframe */
+.line-highlight {
+  background: rgba(34, 197, 94, 0.15);
+  border-left: 3px solid #22c55e;
+  display: block;
+  margin-left: -12px;
+  padding-left: 9px;
+}
