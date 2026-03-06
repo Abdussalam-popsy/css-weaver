@@ -1,5 +1,6 @@
-import type { Animation, KeyframeStep, KeyframesData, AnimationLonghand, DOMTreeNode } from '../shared/types';
+import type { Animation, KeyframeStep, KeyframesData, AnimationLonghand, DOMTreeNode, ElementContext, ElementNode, CategorizedStyles } from '../shared/types';
 import { getSelector, getMeaningfulClasses } from '../utils/getSelector';
+import { categorizeProperty, shouldHideProperty, isDefaultValue, CATEGORY_ORDER } from '../utils/cssCategories';
 
 /**
  * Collected keyframes data including raw CSS text
@@ -7,6 +8,125 @@ import { getSelector, getMeaningfulClasses } from '../utils/getSelector';
 interface CollectedKeyframes {
   steps: KeyframeStep[];
   rawCssText: string;
+}
+
+/**
+ * Capture element node data for HTML structure display
+ */
+function captureElementNode(element: HTMLElement): ElementNode {
+  const attributes: Record<string, string> = {};
+
+  // Capture meaningful attributes (data-*, aria-*, role, href, src, alt, title)
+  for (const attr of element.attributes) {
+    if (
+      attr.name.startsWith('data-') ||
+      attr.name.startsWith('aria-') ||
+      attr.name === 'role' ||
+      attr.name === 'href' ||
+      attr.name === 'src' ||
+      attr.name === 'alt' ||
+      attr.name === 'title' ||
+      attr.name === 'type' ||
+      attr.name === 'name'
+    ) {
+      // Skip our internal markers
+      if (!attr.name.startsWith('data-css-weaver')) {
+        attributes[attr.name] = attr.value;
+      }
+    }
+  }
+
+  // Get truncated direct text content (not from children)
+  let textContent: string | null = null;
+  const directText = Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent?.trim())
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 50);
+
+  if (directText) {
+    textContent = directText + (directText.length >= 50 ? '...' : '');
+  }
+
+  return {
+    tagName: element.tagName.toLowerCase(),
+    id: element.id || null,
+    classList: Array.from(element.classList),
+    attributes,
+    textContent,
+  };
+}
+
+/**
+ * Capture ALL computed styles, organized by category
+ */
+function captureComputedStyles(element: HTMLElement): CategorizedStyles {
+  const computed = getComputedStyle(element);
+  const categorized: CategorizedStyles = {
+    layout: [],
+    box: [],
+    sizing: [],
+    flexbox: [],
+    grid: [],
+    typography: [],
+    visual: [],
+    transform: [],
+    animation: [],
+    other: [],
+  };
+
+  // Iterate through ALL computed properties
+  for (let i = 0; i < computed.length; i++) {
+    const propName = computed[i];
+
+    // Skip browser-prefixed properties
+    if (shouldHideProperty(propName)) continue;
+
+    const value = computed.getPropertyValue(propName);
+    const category = categorizeProperty(propName);
+    const isDefault = isDefaultValue(propName, value);
+
+    categorized[category].push({
+      name: propName,
+      value,
+      isDefault,
+    });
+  }
+
+  // Sort properties alphabetically within each category
+  for (const cat of CATEGORY_ORDER) {
+    categorized[cat].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  return categorized;
+}
+
+/**
+ * Capture complete element context (HTML structure + computed styles)
+ * Includes the element, 1 parent, and 1 grandparent (2 parent levels total)
+ */
+export function captureElementContext(element: HTMLElement): ElementContext {
+  const parent = element.parentElement;
+  const grandparent = parent?.parentElement;
+
+  const rect = element.getBoundingClientRect();
+
+  return {
+    element: captureElementNode(element),
+    parent: parent && parent !== document.body ? captureElementNode(parent) : null,
+    grandparent:
+      grandparent && grandparent !== document.body && grandparent !== document.documentElement
+        ? captureElementNode(grandparent)
+        : null,
+    computedStyles: captureComputedStyles(element),
+    dimensions: {
+      width: rect.width,
+      height: rect.height,
+      offsetTop: element.offsetTop,
+      offsetLeft: element.offsetLeft,
+    },
+  };
 }
 
 /**
@@ -97,6 +217,7 @@ export function scanAnimations(): Animation[] {
           startTime: delay,
           endTime: delay + duration * (iterCount === 'infinite' ? 1 : iterCount),
           position,
+          elementContext: captureElementContext(element as HTMLElement),
         };
 
         // Store element reference for highlighting (append to support multiple animations)
@@ -150,6 +271,7 @@ export function scanAnimations(): Animation[] {
             startTime: delay,
             endTime: delay + duration,
             position,
+            elementContext: captureElementContext(element as HTMLElement),
           };
 
           // Store element reference for highlighting (append to support multiple animations)
@@ -213,6 +335,7 @@ export function scanAnimations(): Animation[] {
               startTime: 0,
               endTime: 100, // Represent as 0-100% for scroll progress
               position,
+              elementContext: captureElementContext(element as HTMLElement),
             };
 
             appendWeaverId(element as HTMLElement, scrollAnim.id);
@@ -305,6 +428,7 @@ function scanWebAnimations(existingAnimations: Animation[]): void {
         startTime: delay,
         endTime: delay + duration,
         position,
+        elementContext: captureElementContext(target as HTMLElement),
       };
 
       appendWeaverId(target as HTMLElement, webAnim.id);

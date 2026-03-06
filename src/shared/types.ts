@@ -1,4 +1,71 @@
 /**
+ * Represents a single element in the HTML structure context
+ */
+export interface ElementNode {
+  tagName: string;
+  id: string | null;
+  classList: string[];
+  attributes: Record<string, string>; // data-*, aria-*, role, href, src, etc.
+  textContent: string | null; // First 50 chars of direct text
+}
+
+/**
+ * CSS property categories for organized display
+ */
+export type CSSCategory =
+  | 'layout'
+  | 'box'
+  | 'sizing'
+  | 'flexbox'
+  | 'grid'
+  | 'typography'
+  | 'visual'
+  | 'transform'
+  | 'animation'
+  | 'other';
+
+/**
+ * A CSS property with its computed value
+ */
+export interface ComputedProperty {
+  name: string;
+  value: string;
+  isDefault: boolean;
+}
+
+/**
+ * Grouped computed styles by category
+ */
+export interface CategorizedStyles {
+  layout: ComputedProperty[];
+  box: ComputedProperty[];
+  sizing: ComputedProperty[];
+  flexbox: ComputedProperty[];
+  grid: ComputedProperty[];
+  typography: ComputedProperty[];
+  visual: ComputedProperty[];
+  transform: ComputedProperty[];
+  animation: ComputedProperty[];
+  other: ComputedProperty[];
+}
+
+/**
+ * Complete element context for HTML/Styles tabs
+ */
+export interface ElementContext {
+  element: ElementNode;
+  parent: ElementNode | null;
+  grandparent: ElementNode | null;
+  computedStyles: CategorizedStyles;
+  dimensions: {
+    width: number;
+    height: number;
+    offsetTop: number;
+    offsetLeft: number;
+  };
+}
+
+/**
  * Represents a single keyframe step in an animation
  */
 export interface KeyframeStep {
@@ -73,11 +140,10 @@ export interface Animation {
   // Type of animation
   // - 'animation': CSS @keyframes animation
   // - 'transition': CSS transition
-  // - 'web-animation': Web Animations API (element.animate())
+  // - 'web-animation': Web Animations API (element.animate(), or library-created)
   // - 'scroll-driven': Scroll-linked animation (animation-timeline: scroll/view)
   // - 'gsap': GSAP animation
-  // - 'framer-motion': Framer Motion animation
-  type: 'animation' | 'transition' | 'web-animation' | 'scroll-driven' | 'gsap' | 'framer-motion';
+  type: 'animation' | 'transition' | 'web-animation' | 'scroll-driven' | 'gsap';
 
   // Scroll-driven animation data (only for scroll-driven type)
   scrollTimeline?: {
@@ -111,6 +177,9 @@ export interface Animation {
     bottom: number; // top + height
     height: number; // Element height
   };
+
+  // Element context for HTML/Styles tabs (element + 2 parents + computed styles)
+  elementContext: ElementContext | null;
 }
 
 /**

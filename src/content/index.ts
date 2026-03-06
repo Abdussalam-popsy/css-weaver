@@ -68,6 +68,8 @@ function initPageScriptInjection() {
       position: animData.position || { top: 0, bottom: 0, height: 0 },
       // Store GSAP-specific properties for code display
       properties: (animData as any).properties || {},
+      // Element context from page script (HTML structure + computed styles)
+      elementContext: (animData as any).elementContext || null,
     };
 
     // Add to shared cache (handles deduplication internally)

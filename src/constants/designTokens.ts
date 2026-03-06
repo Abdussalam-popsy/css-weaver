@@ -90,12 +90,6 @@ export const typeColors = {
     border: 'rgba(251, 191, 36, 0.2)',
     glow: 'rgba(251, 191, 36, 0.15)',
   },
-  'framer-motion': {
-    color: '#f472b6',        // Pink - Framer Motion
-    bg: 'rgba(244, 114, 182, 0.1)',
-    border: 'rgba(244, 114, 182, 0.2)',
-    glow: 'rgba(244, 114, 182, 0.15)',
-  },
   'scroll-driven': {
     color: '#c084fc',        // Purple - Scroll-driven
     bg: 'rgba(192, 132, 252, 0.1)',

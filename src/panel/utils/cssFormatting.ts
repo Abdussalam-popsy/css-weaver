@@ -15,9 +15,6 @@ export function formatAnimationProperty(animation: Animation): string {
     case 'web-animation':
       return formatWebAnimationCode(animation);
 
-    case 'framer-motion':
-      return formatFramerMotionCode(animation);
-
     case 'scroll-driven':
       return formatScrollDrivenCode(animation);
 
@@ -128,33 +125,6 @@ ${keyframesStr}
 });`;
 }
 
-/**
- * Format Framer Motion code
- */
-export function formatFramerMotionCode(animation: Animation): string {
-  const props = animation.properties || {};
-  const propEntries = Object.entries(props);
-
-  // Build animate props
-  const animateProps: string[] = [];
-  for (const [key, value] of propEntries) {
-    animateProps.push(`    ${key}: ${value}`);
-  }
-
-  const animateStr = animateProps.join(',\n');
-
-  return `// Framer Motion
-<motion.div
-  animate={{
-${animateStr}
-  }}
-  transition={{
-    duration: ${(animation.duration / 1000).toFixed(2)},
-    ease: "${animation.timingFunction}"${animation.delay > 0 ? `,
-    delay: ${(animation.delay / 1000).toFixed(2)}` : ''}
-  }}
-/>`;
-}
 
 /**
  * Format scroll-driven animation code
@@ -267,9 +237,6 @@ export function getCompleteCss(animation: Animation): string {
 
     case 'web-animation':
       return `/* Web Animation API for ${animation.selector} */\n${code}`;
-
-    case 'framer-motion':
-      return `/* Framer Motion for ${animation.selector} */\n${code}`;
 
     case 'scroll-driven':
       return `/* Scroll-driven Animation for ${animation.selector} */\n${code}`;

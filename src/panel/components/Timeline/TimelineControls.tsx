@@ -1,4 +1,4 @@
-type AnimationFilter = 'all' | 'animation' | 'transition' | 'web-animation' | 'scroll-driven' | 'gsap' | 'framer-motion';
+type AnimationFilter = 'all' | 'animation' | 'transition' | 'web-animation' | 'scroll-driven' | 'gsap';
 
 interface TimelineControlsProps {
   searchQuery: string;
@@ -38,7 +38,6 @@ export default function TimelineControls({
         <option value="web-animation">Web Animations</option>
         <option value="scroll-driven">Scroll-driven</option>
         <option value="gsap">GSAP</option>
-        <option value="framer-motion">Framer Motion</option>
       </select>
 
       {searchQuery && (

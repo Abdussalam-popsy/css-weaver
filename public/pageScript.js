@@ -49,6 +49,179 @@
     log('Sent animation:', animationData.name);
   }
 
+  /**
+   * Capture element node data for HTML structure display
+   */
+  function captureElementNode(element) {
+    if (!element || !(element instanceof HTMLElement)) return null;
+
+    const attributes = {};
+
+    // Capture meaningful attributes
+    for (const attr of element.attributes) {
+      if (
+        attr.name.startsWith('data-') ||
+        attr.name.startsWith('aria-') ||
+        attr.name === 'role' ||
+        attr.name === 'href' ||
+        attr.name === 'src' ||
+        attr.name === 'alt' ||
+        attr.name === 'title' ||
+        attr.name === 'type' ||
+        attr.name === 'name'
+      ) {
+        // Skip our internal markers
+        if (!attr.name.startsWith('data-css-weaver')) {
+          attributes[attr.name] = attr.value;
+        }
+      }
+    }
+
+    // Get truncated direct text content
+    let textContent = null;
+    const directText = Array.from(element.childNodes)
+      .filter(node => node.nodeType === Node.TEXT_NODE)
+      .map(node => node.textContent?.trim())
+      .filter(Boolean)
+      .join(' ')
+      .slice(0, 50);
+
+    if (directText) {
+      textContent = directText + (directText.length >= 50 ? '...' : '');
+    }
+
+    return {
+      tagName: element.tagName.toLowerCase(),
+      id: element.id || null,
+      classList: Array.from(element.classList),
+      attributes,
+      textContent,
+    };
+  }
+
+  /**
+   * CSS property category mapping (simplified version)
+   */
+  function categorizeProperty(propName) {
+    // Layout
+    if (['display', 'position', 'top', 'right', 'bottom', 'left', 'float', 'clear', 'z-index'].includes(propName)) {
+      return 'layout';
+    }
+    // Box Model
+    if (propName.startsWith('margin') || propName.startsWith('padding') || propName.startsWith('border') || propName.startsWith('outline')) {
+      return 'box';
+    }
+    // Sizing
+    if (['width', 'height', 'min-width', 'max-width', 'min-height', 'max-height', 'box-sizing', 'aspect-ratio'].includes(propName)) {
+      return 'sizing';
+    }
+    // Flexbox
+    if (propName.startsWith('flex') || propName.startsWith('align-') || propName.startsWith('justify-') || ['gap', 'row-gap', 'column-gap', 'order'].includes(propName)) {
+      return 'flexbox';
+    }
+    // Grid
+    if (propName.startsWith('grid') || propName.startsWith('place-')) {
+      return 'grid';
+    }
+    // Typography
+    if (propName.startsWith('font') || propName.startsWith('text') || ['color', 'line-height', 'letter-spacing', 'word-spacing', 'white-space', 'vertical-align'].includes(propName)) {
+      return 'typography';
+    }
+    // Visual
+    if (propName.startsWith('background') || ['opacity', 'visibility', 'overflow', 'overflow-x', 'overflow-y', 'cursor', 'pointer-events', 'box-shadow', 'filter', 'backdrop-filter', 'clip-path'].includes(propName)) {
+      return 'visual';
+    }
+    // Transform
+    if (propName.startsWith('transform') || propName.startsWith('perspective') || ['rotate', 'scale', 'translate', 'backface-visibility'].includes(propName)) {
+      return 'transform';
+    }
+    // Animation
+    if (propName.startsWith('animation') || propName.startsWith('transition') || propName === 'will-change') {
+      return 'animation';
+    }
+    return 'other';
+  }
+
+  /**
+   * Check if a value is a browser default
+   */
+  function isDefaultValue(propName, value) {
+    const defaults = ['0px', '0', '0s', 'none', 'normal', 'auto', 'visible', 'static', 'transparent', 'rgba(0, 0, 0, 0)'];
+    return defaults.includes(value);
+  }
+
+  /**
+   * Capture computed styles, organized by category
+   */
+  function captureComputedStyles(element) {
+    if (!element || !(element instanceof HTMLElement)) return null;
+
+    const computed = getComputedStyle(element);
+    const categorized = {
+      layout: [],
+      box: [],
+      sizing: [],
+      flexbox: [],
+      grid: [],
+      typography: [],
+      visual: [],
+      transform: [],
+      animation: [],
+      other: [],
+    };
+
+    // Iterate through all computed properties
+    for (let i = 0; i < computed.length; i++) {
+      const propName = computed[i];
+
+      // Skip browser-prefixed properties
+      if (propName.startsWith('-webkit-') || propName.startsWith('-moz-') || propName.startsWith('-ms-')) continue;
+
+      const value = computed.getPropertyValue(propName);
+      const category = categorizeProperty(propName);
+      const isDefault = isDefaultValue(propName, value);
+
+      categorized[category].push({
+        name: propName,
+        value,
+        isDefault,
+      });
+    }
+
+    // Sort properties alphabetically within each category
+    for (const cat of Object.keys(categorized)) {
+      categorized[cat].sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return categorized;
+  }
+
+  /**
+   * Capture complete element context
+   */
+  function captureElementContext(element) {
+    if (!element || !(element instanceof HTMLElement)) return null;
+
+    const parent = element.parentElement;
+    const grandparent = parent?.parentElement;
+    const rect = element.getBoundingClientRect();
+
+    return {
+      element: captureElementNode(element),
+      parent: parent && parent !== document.body ? captureElementNode(parent) : null,
+      grandparent: grandparent && grandparent !== document.body && grandparent !== document.documentElement
+        ? captureElementNode(grandparent)
+        : null,
+      computedStyles: captureComputedStyles(element),
+      dimensions: {
+        width: rect.width,
+        height: rect.height,
+        offsetTop: element.offsetTop,
+        offsetLeft: element.offsetLeft,
+      },
+    };
+  }
+
   function extractTweenData(tween, tweenType) {
     const animations = [];
 
@@ -103,6 +276,7 @@
             bottom: rect.bottom + window.scrollY,
             height: rect.height,
           },
+          elementContext: captureElementContext(target),
         });
       });
     } catch (error) {
@@ -362,7 +536,6 @@
             scanExistingAnimations(gsap);
           }
           scanWebAnimationsAPI();
-          scanFramerMotionElements();
         }, 100);
       });
     }
@@ -433,39 +606,18 @@
         const duration = typeof timing.duration === 'number' ? timing.duration : 0;
         const delay = typeof timing.delay === 'number' ? timing.delay : 0;
 
-        // Determine animation type based on characteristics
-        let animType = 'web-animation';
-        let animName = 'Web Animation';
-
-        // Check for Framer Motion characteristics
-        const isFramer = window.__FRAMER_MOTION__ ||
-                        target.hasAttribute('data-projection-id') ||
-                        target.hasAttribute('data-framer-component-type');
-        if (isFramer) {
-          animType = 'framer-motion';
-          animName = 'framer';
-        }
-
-        // Check for anime.js
-        if (window.anime) {
-          animType = 'web-animation';
-          animName = 'anime.js';
-        }
-
-        // Build property names for display
+        // Build animation name from properties
         const propNames = Object.keys(animatedProps).slice(0, 3).join(', ');
-        if (propNames) {
-          animName += ': ' + propNames;
-        }
+        const animName = propNames ? 'Web Animation: ' + propNames : 'Web Animation';
 
-        const id = generateId().replace('gsap-', animType === 'framer-motion' ? 'framer-' : 'waapi-');
+        const id = generateId().replace('gsap-', 'waapi-');
         const rect = target.getBoundingClientRect();
 
         target.setAttribute('data-css-weaver-id', id);
 
         sendAnimation({
           id,
-          type: animType,
+          type: 'web-animation',
           selector: getSelector(target),
           tagName: target.tagName,
           name: animName,
@@ -481,50 +633,12 @@
             bottom: rect.bottom + window.scrollY,
             height: rect.height,
           },
+          elementContext: captureElementContext(target),
         });
       });
     } catch (error) {
       log('Error scanning Web Animations API:', error);
     }
-  }
-
-  // Legacy Framer Motion scan for elements with data attributes (fallback)
-  function scanFramerMotionElements() {
-    const framerElements = document.querySelectorAll('[data-framer-component-type], [data-projection-id]');
-    if (framerElements.length === 0) return;
-
-    log('Found ' + framerElements.length + ' Framer elements with data attributes');
-
-    framerElements.forEach((el) => {
-      if (!(el instanceof HTMLElement)) return;
-      if (el.hasAttribute('data-css-weaver-id')) return;
-
-      const id = generateId().replace('gsap-', 'framer-');
-      const rect = el.getBoundingClientRect();
-      const componentType = el.getAttribute('data-framer-component-type') || 'motion';
-
-      el.setAttribute('data-css-weaver-id', id);
-
-      sendAnimation({
-        id,
-        type: 'framer-motion',
-        selector: getSelector(el),
-        tagName: el.tagName,
-        name: 'framer.' + componentType,
-        duration: 300,
-        delay: 0,
-        timingFunction: 'spring',
-        iterationCount: 1,
-        direction: 'normal',
-        fillMode: 'both',
-        properties: {},
-        position: {
-          top: rect.top + window.scrollY,
-          bottom: rect.bottom + window.scrollY,
-          height: rect.height,
-        },
-      });
-    });
   }
 
   // Send diagnostic info for troubleshooting
@@ -564,10 +678,8 @@
     if (gsap) {
       scanExistingAnimations(gsap);
     }
-    // Scan Web Animations API (catches Framer Motion, anime.js, etc.)
+    // Scan Web Animations API (catches animations from various libraries)
     scanWebAnimationsAPI();
-    // Fallback: scan for Framer elements by data attributes
-    scanFramerMotionElements();
     document.dispatchEvent(new CustomEvent('css-weaver-scan-complete', {
       detail: { gsapFound: !!gsap }
     }));
@@ -600,10 +712,9 @@
   // Detect Barba.js for page transitions
   detectBarba();
 
-  // Scan Web Animations API and Framer after page load settles
+  // Scan Web Animations API after page load settles
   setTimeout(() => {
     scanWebAnimationsAPI();
-    scanFramerMotionElements();
   }, 500);
 
   document.dispatchEvent(new CustomEvent('css-weaver-page-ready'));

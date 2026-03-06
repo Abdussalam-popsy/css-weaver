@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Animation } from '../../shared/types';
+import type { Animation, ElementContext, ElementNode, CSSCategory } from '../../shared/types';
 import { scanAnimations } from '../scanner';
 import { highlightElement, clearHighlight } from '../highlighter';
 import { getCachedAnimations, hasCachedAnimations, setCachedAnimations, getPageDetectedAnimations } from '../animationCache';
 import { requestPageScan } from '../injected/inject';
 import { formatAnimationProperty, getCompleteCss } from '../../panel/utils/cssFormatting';
 import { colors, typography, radius, transitions, shadows, getTypeColorScheme, type TypeColorScheme } from '../../constants/designTokens';
+import { CATEGORY_LABELS, CATEGORY_ORDER } from '../../utils/cssCategories';
 import EasingCurve from '../../components/EasingCurve';
 
 interface FloatingAppProps {
@@ -19,7 +20,6 @@ const TYPE_LABELS: Record<string, string> = {
   'transition': 'Trans',
   'gsap': 'GSAP',
   'web-animation': 'WAAPI',
-  'framer-motion': 'Framer',
   'scroll-driven': 'Scroll',
 };
 
@@ -161,6 +161,335 @@ function InspectTooltip({ animations, position }: {
   );
 }
 
+/**
+ * HTML Structure Tab - Shows element + 2 parent levels
+ */
+function HTMLStructureTab({ context, onCopy }: { context: ElementContext; onCopy: (text: string) => void }) {
+  const renderNode = (node: ElementNode, depth: number, isTarget: boolean) => {
+    const indent = depth * 16;
+
+    return (
+      <div
+        key={`node-${depth}`}
+        style={{
+          paddingLeft: `${indent}px`,
+          background: isTarget ? colors.accent.muted : 'transparent',
+          borderRadius: radius.md,
+          padding: '4px 8px',
+          marginBottom: '2px',
+        }}
+      >
+        <span style={{ color: colors.accent.secondary }}>&lt;</span>
+        <span style={{ color: isTarget ? colors.accent.primary : colors.text.primary, fontWeight: isTarget ? 600 : 400 }}>
+          {node.tagName}
+        </span>
+        {node.id && (
+          <span style={{ color: colors.success.primary }}>{` id="${node.id}"`}</span>
+        )}
+        {node.classList.length > 0 && (
+          <span style={{ color: colors.warning.primary }}>{` class="${node.classList.slice(0, 4).join(' ')}${node.classList.length > 4 ? '...' : ''}"`}</span>
+        )}
+        {Object.entries(node.attributes).slice(0, 2).map(([key, value]) => (
+          <span key={key} style={{ color: colors.text.tertiary }}>{` ${key}="${value.slice(0, 20)}${value.length > 20 ? '...' : ''}"`}</span>
+        ))}
+        <span style={{ color: colors.accent.secondary }}>&gt;</span>
+        {node.textContent && (
+          <span style={{ color: colors.text.disabled, fontStyle: 'italic', marginLeft: '4px' }}>
+            {node.textContent}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const generateHTMLString = (): string => {
+    const lines: string[] = [];
+
+    const formatNode = (node: ElementNode, indent: string): string => {
+      let attrs = '';
+      if (node.id) attrs += ` id="${node.id}"`;
+      if (node.classList.length > 0) attrs += ` class="${node.classList.join(' ')}"`;
+      Object.entries(node.attributes).forEach(([key, value]) => {
+        attrs += ` ${key}="${value}"`;
+      });
+      return `${indent}<${node.tagName}${attrs}>`;
+    };
+
+    if (context.grandparent) {
+      lines.push(formatNode(context.grandparent, ''));
+    }
+    if (context.parent) {
+      lines.push(formatNode(context.parent, context.grandparent ? '  ' : ''));
+    }
+    const targetIndent = '  '.repeat((context.grandparent ? 1 : 0) + (context.parent ? 1 : 0));
+    lines.push(formatNode(context.element, targetIndent));
+    lines.push(`${targetIndent}</${context.element.tagName}>`);
+    if (context.parent) {
+      lines.push(`${'  '.repeat(context.grandparent ? 1 : 0)}</${context.parent.tagName}>`);
+    }
+    if (context.grandparent) {
+      lines.push(`</${context.grandparent.tagName}>`);
+    }
+
+    return lines.join('\n');
+  };
+
+  return (
+    <div style={{ fontFamily: typography.fontFamily.mono, fontSize: typography.fontSize.sm }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '8px',
+      }}>
+        <span style={{
+          color: colors.text.tertiary,
+          fontSize: typography.fontSize.xs,
+          textTransform: 'uppercase',
+          letterSpacing: typography.letterSpacing.wide,
+        }}>
+          DOM Structure
+        </span>
+        <button
+          onClick={() => onCopy(generateHTMLString())}
+          style={{
+            padding: '4px 8px',
+            borderRadius: radius.md,
+            border: `1px solid ${colors.border.default}`,
+            background: 'transparent',
+            color: colors.text.secondary,
+            fontSize: typography.fontSize.xs,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            transition: transitions.fast,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy
+        </button>
+      </div>
+
+      <div style={{
+        background: colors.bg.tertiary,
+        borderRadius: radius.lg,
+        padding: '10px',
+        overflow: 'auto',
+        maxHeight: '140px',
+      }}>
+        {context.grandparent && renderNode(context.grandparent, 0, false)}
+        {context.parent && renderNode(context.parent, context.grandparent ? 1 : 0, false)}
+        {renderNode(context.element, (context.grandparent ? 1 : 0) + (context.parent ? 1 : 0), true)}
+      </div>
+
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        marginTop: '8px',
+        fontSize: typography.fontSize.xs,
+        color: colors.text.tertiary,
+      }}>
+        <span>{Math.round(context.dimensions.width)} × {Math.round(context.dimensions.height)}px</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Computed Styles Tab - Shows categorized CSS properties
+ */
+function ComputedStylesTab({ context, onCopy }: { context: ElementContext; onCopy: (text: string) => void }) {
+  const [showDefaults, setShowDefaults] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<CSSCategory>>(
+    new Set(['layout', 'sizing', 'transform', 'animation'])
+  );
+
+  const toggleCategory = (cat: CSSCategory) => {
+    const newSet = new Set(expandedCategories);
+    if (newSet.has(cat)) {
+      newSet.delete(cat);
+    } else {
+      newSet.add(cat);
+    }
+    setExpandedCategories(newSet);
+  };
+
+  const generateCSSString = (): string => {
+    const lines: string[] = [];
+
+    CATEGORY_ORDER.forEach(cat => {
+      const props = showDefaults
+        ? context.computedStyles[cat]
+        : context.computedStyles[cat].filter(p => !p.isDefault);
+
+      if (props.length > 0) {
+        lines.push(`/* ${CATEGORY_LABELS[cat].toUpperCase()} */`);
+        props.forEach(p => {
+          lines.push(`${p.name}: ${p.value};`);
+        });
+        lines.push('');
+      }
+    });
+
+    return lines.join('\n');
+  };
+
+  const renderCategory = (category: CSSCategory) => {
+    const props = context.computedStyles[category];
+    const filteredProps = showDefaults
+      ? props
+      : props.filter(p => !p.isDefault);
+
+    if (filteredProps.length === 0) return null;
+
+    const isExpanded = expandedCategories.has(category);
+
+    return (
+      <div key={category} style={{ marginBottom: '6px' }}>
+        <button
+          onClick={() => toggleCategory(category)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            width: '100%',
+            padding: '5px 8px',
+            background: colors.bg.tertiary,
+            border: `1px solid ${colors.border.subtle}`,
+            borderRadius: radius.md,
+            color: colors.text.primary,
+            fontSize: typography.fontSize.sm,
+            fontWeight: typography.fontWeight.medium,
+            cursor: 'pointer',
+            transition: transitions.fast,
+            textAlign: 'left',
+          }}
+        >
+          <svg
+            width="8"
+            height="8"
+            viewBox="0 0 10 10"
+            style={{
+              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: transitions.fast,
+            }}
+          >
+            <path d="M3 1L7 5L3 9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+          {CATEGORY_LABELS[category]}
+          <span style={{
+            marginLeft: 'auto',
+            color: colors.text.tertiary,
+            fontSize: typography.fontSize.xs,
+          }}>
+            {filteredProps.length}
+          </span>
+        </button>
+
+        {isExpanded && (
+          <div style={{
+            padding: '6px 10px',
+            background: colors.bg.secondary,
+            borderRadius: `0 0 ${radius.md} ${radius.md}`,
+            marginTop: '-1px',
+            border: `1px solid ${colors.border.subtle}`,
+            borderTop: 'none',
+            maxHeight: '100px',
+            overflow: 'auto',
+          }}>
+            {filteredProps.map((prop, idx) => (
+              <div
+                key={prop.name}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '2px 0',
+                  borderBottom: idx < filteredProps.length - 1
+                    ? `1px solid ${colors.border.subtle}`
+                    : 'none',
+                  fontSize: typography.fontSize.xs,
+                  fontFamily: typography.fontFamily.mono,
+                  gap: '8px',
+                }}
+              >
+                <span style={{ color: colors.accent.primary, flexShrink: 0 }}>{prop.name}</span>
+                <span style={{
+                  color: colors.text.secondary,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  textAlign: 'right',
+                }}>
+                  {prop.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '8px',
+        gap: '8px',
+      }}>
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontSize: typography.fontSize.xs,
+          color: colors.text.tertiary,
+          cursor: 'pointer',
+        }}>
+          <input
+            type="checkbox"
+            checked={showDefaults}
+            onChange={(e) => setShowDefaults(e.target.checked)}
+            style={{ width: '12px', height: '12px', accentColor: colors.accent.primary }}
+          />
+          Show defaults
+        </label>
+        <button
+          onClick={() => onCopy(generateCSSString())}
+          style={{
+            padding: '4px 8px',
+            borderRadius: radius.md,
+            border: `1px solid ${colors.border.default}`,
+            background: 'transparent',
+            color: colors.text.secondary,
+            fontSize: typography.fontSize.xs,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            transition: transitions.fast,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy
+        </button>
+      </div>
+
+      <div style={{ maxHeight: '160px', overflow: 'auto' }}>
+        {CATEGORY_ORDER.map(renderCategory)}
+      </div>
+    </div>
+  );
+}
+
 export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
   const [animations, setAnimations] = useState<Animation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,7 +498,7 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'code'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'code' | 'html' | 'styles'>('overview');
   const [inspectModeEnabled, setInspectModeEnabled] = useState(false);
   const [inspectTooltipAnims, setInspectTooltipAnims] = useState<Animation[]>([]);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -813,6 +1142,18 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
               >
                 Code
               </button>
+              <button
+                style={styles.tab(activeTab === 'html')}
+                onClick={() => setActiveTab('html')}
+              >
+                HTML
+              </button>
+              <button
+                style={styles.tab(activeTab === 'styles')}
+                onClick={() => setActiveTab('styles')}
+              >
+                Styles
+              </button>
               <div style={{ flex: 1 }} />
               <button
                 style={styles.copyButton(copiedId === selectedAnimation.id)}
@@ -841,7 +1182,7 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
               </button>
             </div>
 
-            {activeTab === 'overview' ? (
+            {activeTab === 'overview' && (
               <div style={{ display: 'flex', gap: '12px' }}>
                 <div style={{ flexShrink: 0 }}>
                   <EasingCurve
@@ -875,11 +1216,49 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
                   </div>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {activeTab === 'code' && (
               <div style={styles.codeBlock}>
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
                   {formatAnimationProperty(selectedAnimation)}
                 </pre>
+              </div>
+            )}
+
+            {activeTab === 'html' && selectedAnimation.elementContext && (
+              <HTMLStructureTab
+                context={selectedAnimation.elementContext}
+                onCopy={(text) => handleCopy(text, `html-${selectedAnimation.id}`)}
+              />
+            )}
+
+            {activeTab === 'html' && !selectedAnimation.elementContext && (
+              <div style={{
+                padding: '20px',
+                textAlign: 'center',
+                color: colors.text.tertiary,
+                fontSize: typography.fontSize.sm,
+              }}>
+                No HTML context available for this animation
+              </div>
+            )}
+
+            {activeTab === 'styles' && selectedAnimation.elementContext && (
+              <ComputedStylesTab
+                context={selectedAnimation.elementContext}
+                onCopy={(text) => handleCopy(text, `styles-${selectedAnimation.id}`)}
+              />
+            )}
+
+            {activeTab === 'styles' && !selectedAnimation.elementContext && (
+              <div style={{
+                padding: '20px',
+                textAlign: 'center',
+                color: colors.text.tertiary,
+                fontSize: typography.fontSize.sm,
+              }}>
+                No computed styles available for this animation
               </div>
             )}
           </div>

@@ -10,7 +10,7 @@ import PlaybackPlayhead from './PlaybackPlayhead';
 export default function Timeline() {
   const { animations, totalDuration, targetPageScroll, visibilityFilterMode, playbackState, detailsPanelOpen, toggleDetailsPanel } = useAnimationStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'animation' | 'transition' | 'web-animation' | 'scroll-driven' | 'gsap' | 'framer-motion'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'animation' | 'transition' | 'web-animation' | 'scroll-driven' | 'gsap'>('all');
 
   // Apply filters
   const filteredAnimations = animations.filter((anim) => {

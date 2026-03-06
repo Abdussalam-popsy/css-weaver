@@ -3,7 +3,7 @@
  * Consolidated mappings for animation type labels, colors, and styling
  */
 
-export type AnimationType = 'animation' | 'transition' | 'gsap' | 'web-animation' | 'framer-motion' | 'scroll-driven';
+export type AnimationType = 'animation' | 'transition' | 'gsap' | 'web-animation' | 'scroll-driven';
 
 export interface AnimationTypeConfig {
   label: string;
@@ -46,14 +46,6 @@ export const ANIMATION_TYPES: Record<AnimationType, AnimationTypeConfig> = {
     bgColor: 'rgba(251, 191, 36, 0.15)',
     borderColor: 'rgba(251, 191, 36, 0.3)',
     tailwindClass: 'bg-yellow-500/20 text-yellow-400',
-  },
-  'framer-motion': {
-    label: 'Framer Motion',
-    shortLabel: 'Framer',
-    color: '#ff0088',
-    bgColor: 'rgba(255, 0, 136, 0.15)',
-    borderColor: 'rgba(255, 0, 136, 0.3)',
-    tailwindClass: 'bg-pink-500/20 text-pink-400',
   },
   'scroll-driven': {
     label: 'Scroll-Driven',
