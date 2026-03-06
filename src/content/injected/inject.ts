@@ -21,8 +21,7 @@
 
 import type { Animation } from '../../shared/types';
 
-// Store animations detected via page script
-const pageDetectedAnimations: Animation[] = [];
+// Note: Animation storage now handled by animationCache.ts (single source of truth)
 
 /**
  * Inject the page script into the document
@@ -120,16 +119,5 @@ export function requestPageScan(): Promise<{ gsapFound: boolean }> {
   });
 }
 
-/**
- * Get all animations detected via page script
- */
-export function getPageDetectedAnimations(): Animation[] {
-  return [...pageDetectedAnimations];
-}
-
-/**
- * Clear page detected animations
- */
-export function clearPageDetectedAnimations(): void {
-  pageDetectedAnimations.length = 0;
-}
+// Note: getPageDetectedAnimations and clearPageDetectedAnimations removed
+// Animation storage now handled by animationCache.ts

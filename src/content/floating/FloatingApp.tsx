@@ -5,6 +5,8 @@ import { highlightElement, clearHighlight } from '../highlighter';
 import { getCachedAnimations, hasCachedAnimations, setCachedAnimations, getPageDetectedAnimations } from '../animationCache';
 import { requestPageScan } from '../injected/inject';
 import { formatAnimationProperty, getCompleteCss } from '../../panel/utils/cssFormatting';
+import { getTypeLabel, getTypeColors } from '../../constants/animationTypes';
+import EasingCurve from '../../components/EasingCurve';
 
 interface FloatingAppProps {
   onClose: () => void;
@@ -23,40 +25,7 @@ const colors = {
   text: '#ffffff',
   textMuted: '#9ca3af',
   textDim: '#6b7280',
-  // Animation type colors
-  animation: { bg: 'rgba(34, 197, 94, 0.15)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.3)' },
-  transition: { bg: 'rgba(59, 130, 246, 0.15)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' },
-  gsap: { bg: 'rgba(136, 206, 2, 0.15)', text: '#88ce02', border: 'rgba(136, 206, 2, 0.3)' },
-  framerMotion: { bg: 'rgba(255, 0, 136, 0.15)', text: '#ff0088', border: 'rgba(255, 0, 136, 0.3)' },
-  webAnimation: { bg: 'rgba(251, 191, 36, 0.15)', text: '#fbbf24', border: 'rgba(251, 191, 36, 0.3)' },
-  scrollDriven: { bg: 'rgba(168, 85, 247, 0.15)', text: '#a855f7', border: 'rgba(168, 85, 247, 0.3)' },
 };
-
-// Get colors for animation type
-function getTypeColors(type: string) {
-  switch (type) {
-    case 'animation': return colors.animation;
-    case 'transition': return colors.transition;
-    case 'gsap': return colors.gsap;
-    case 'framer-motion': return colors.framerMotion;
-    case 'web-animation': return colors.webAnimation;
-    case 'scroll-driven': return colors.scrollDriven;
-    default: return colors.animation;
-  }
-}
-
-// Human-readable type labels
-function getTypeLabel(type: string): string {
-  switch (type) {
-    case 'animation': return 'Keyframes';
-    case 'transition': return 'Transition';
-    case 'gsap': return 'GSAP';
-    case 'framer-motion': return 'Framer';
-    case 'web-animation': return 'Web API';
-    case 'scroll-driven': return 'Scroll';
-    default: return type;
-  }
-}
 
 // Generate human-readable description of what the animation does
 function getAnimationDescription(anim: Animation): string {
@@ -470,7 +439,7 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
 
   const selectedAnimation = animations.find((a) => a.id === selectedId);
 
-  // Styles
+  // Styles - refined for v2 (dark, minimal, precise)
   const styles = {
     container: {
       display: 'flex',
@@ -479,6 +448,8 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
       background: colors.bg,
       color: colors.text,
       fontSize: '12px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      letterSpacing: '-0.01em',
     },
     toolbar: {
       display: 'flex',
@@ -565,10 +536,12 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
       padding: '10px 12px',
     },
     badge: (typeColors: { bg: string; text: string; border: string }) => ({
-      padding: '3px 8px',
-      borderRadius: '6px',
-      fontSize: '10px',
+      padding: '2px 6px',
+      borderRadius: '4px',
+      fontSize: '9px',
       fontWeight: 600,
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.03em',
       background: typeColors.bg,
       color: typeColors.text,
       border: `1px solid ${typeColors.border}`,
@@ -628,29 +601,32 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
       border: `1px solid ${colors.border}`,
     },
     detailLabel: {
-      fontSize: '10px',
+      fontSize: '9px',
       color: colors.textDim,
-      marginBottom: '2px',
+      marginBottom: '3px',
       textTransform: 'uppercase' as const,
-      letterSpacing: '0.5px',
+      letterSpacing: '0.06em',
+      fontWeight: 500,
     },
     detailValue: {
-      fontSize: '13px',
+      fontSize: '14px',
       color: colors.text,
-      fontWeight: 500,
+      fontWeight: 600,
+      lineHeight: 1.2,
     },
     codeBlock: {
       padding: '12px',
       background: colors.bg,
       borderRadius: '8px',
       border: `1px solid ${colors.border}`,
-      fontFamily: '"Fira Code", "Monaco", "Consolas", monospace',
+      fontFamily: '"SF Mono", "Fira Code", "Monaco", "Consolas", monospace',
       fontSize: '11px',
       whiteSpace: 'pre-wrap' as const,
       wordBreak: 'break-all' as const,
       maxHeight: '160px',
       overflow: 'auto',
-      lineHeight: 1.6,
+      lineHeight: 1.5,
+      color: '#e5e7eb',
     },
     copyButton: (isCopied: boolean) => ({
       padding: '6px 12px',
@@ -961,36 +937,58 @@ export default function FloatingApp({ onClose: _onClose }: FloatingAppProps) {
             </div>
 
             {activeTab === 'overview' ? (
-              <div style={styles.detailGrid}>
-                <div style={styles.detailCard}>
-                  <div style={styles.detailLabel}>Duration</div>
-                  <div style={styles.detailValue}>{formatDuration(selectedAnimation.duration)}</div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {/* Easing curve visualization */}
+                <div style={{ flexShrink: 0 }}>
+                  <EasingCurve
+                    easing={selectedAnimation.timingFunction}
+                    width={90}
+                    height={90}
+                    showHandles={true}
+                    showLinear={true}
+                  />
                 </div>
-                <div style={styles.detailCard}>
-                  <div style={styles.detailLabel}>Delay</div>
-                  <div style={styles.detailValue}>{formatDuration(selectedAnimation.delay)}</div>
-                </div>
-                <div style={styles.detailCard}>
-                  <div style={styles.detailLabel}>Timing</div>
-                  <div style={styles.detailValue}>{formatTiming(selectedAnimation.timingFunction)}</div>
-                </div>
-                <div style={styles.detailCard}>
-                  <div style={styles.detailLabel}>Iterations</div>
-                  <div style={styles.detailValue}>
-                    {selectedAnimation.iterationCount === 'infinite' ? 'Infinite' : selectedAnimation.iterationCount}
+
+                {/* Timing info grid */}
+                <div style={{ ...styles.detailGrid, flex: 1 }}>
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Duration</div>
+                    <div style={styles.detailValue}>{formatDuration(selectedAnimation.duration)}</div>
                   </div>
-                </div>
-                <div style={{ ...styles.detailCard, gridColumn: '1 / -1' }}>
-                  <div style={styles.detailLabel}>Element</div>
-                  <div style={{
-                    ...styles.detailValue,
-                    fontFamily: '"Fira Code", monospace',
-                    fontSize: '11px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {selectedAnimation.selector}
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Delay</div>
+                    <div style={styles.detailValue}>{formatDuration(selectedAnimation.delay)}</div>
+                  </div>
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Iterations</div>
+                    <div style={styles.detailValue}>
+                      {selectedAnimation.iterationCount === 'infinite' ? 'Infinite' : selectedAnimation.iterationCount}
+                    </div>
+                  </div>
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Easing</div>
+                    <div style={{
+                      ...styles.detailValue,
+                      fontSize: '11px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {formatTiming(selectedAnimation.timingFunction)}
+                    </div>
+                  </div>
+                  <div style={{ ...styles.detailCard, gridColumn: '1 / -1' }}>
+                    <div style={styles.detailLabel}>Element</div>
+                    <div style={{
+                      ...styles.detailValue,
+                      fontFamily: '"Fira Code", monospace',
+                      fontSize: '11px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {selectedAnimation.selector}
+                    </div>
                   </div>
                 </div>
               </div>

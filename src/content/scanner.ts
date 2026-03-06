@@ -1,4 +1,5 @@
 import type { Animation, KeyframeStep, KeyframesData, AnimationLonghand, DOMTreeNode } from '../shared/types';
+import { getSelector, getMeaningfulClasses } from '../utils/getSelector';
 
 /**
  * Collected keyframes data including raw CSS text
@@ -225,11 +226,8 @@ export function scanAnimations(): Animation[] {
   // Also scan for Web Animations API animations
   scanWebAnimations(animations);
 
-  // Scan for GSAP animations
-  scanGSAPAnimations(animations);
-
-  // Scan for Framer Motion animations
-  scanFramerMotionAnimations(animations);
+  // Note: GSAP and Framer Motion detection happens through pageScript.js → CustomEvent → animationCache.ts
+  // The content script's isolated world cannot access window.gsap or window.__FRAMER_MOTION__
 
   return animations;
 }
@@ -317,228 +315,9 @@ function scanWebAnimations(existingAnimations: Animation[]): void {
   }
 }
 
-/**
- * Scans for GSAP animations
- * GSAP exposes gsap.globalTimeline which contains all active tweens
- */
-function scanGSAPAnimations(existingAnimations: Animation[]): void {
-  try {
-    // Check if GSAP is available
-    const gsap = (window as any).gsap || (window as any).GreenSock;
-    if (!gsap) {
-      console.debug('CSS Weaver: GSAP not detected on this page');
-      return;
-    }
-
-    console.log('🎨 CSS Weaver: GSAP detected, scanning animations...');
-
-    // Get the global timeline
-    const globalTimeline = gsap.globalTimeline;
-    if (!globalTimeline) return;
-
-    // Get all children (tweens and timelines)
-    const children = globalTimeline.getChildren(true, true, true);
-
-    children.forEach((tween: any) => {
-      // Skip if not a tween with a target
-      if (!tween.targets || typeof tween.targets !== 'function') return;
-
-      const targets = tween.targets();
-      if (!targets || targets.length === 0) return;
-
-      targets.forEach((target: any) => {
-        if (!(target instanceof HTMLElement)) return;
-
-        // Skip if already has an animation ID (avoid duplicates)
-        if (target.dataset.cssWeaverId) return;
-
-        const duration = (tween.duration?.() || 0) * 1000; // Convert to ms
-        const delay = (tween.delay?.() || 0) * 1000;
-
-        // Try to get the animated properties
-        const vars = tween.vars || {};
-        const animatedProps: Record<string, string> = {};
-        for (const [key, value] of Object.entries(vars)) {
-          if (key !== 'ease' && key !== 'duration' && key !== 'delay' && key !== 'onComplete' && key !== 'onStart') {
-            animatedProps[key] = String(value);
-          }
-        }
-
-        const rect = target.getBoundingClientRect();
-        const position = {
-          top: rect.top + window.scrollY,
-          bottom: rect.top + window.scrollY + rect.height,
-          height: rect.height,
-        };
-
-        // Build a name from the animated properties
-        const propNames = Object.keys(animatedProps).slice(0, 3).join(', ');
-        const tweenName = propNames ? `gsap: ${propNames}` : 'gsap tween';
-
-        const gsapAnim: Animation = {
-          id: generateId(),
-          selector: getSelector(target),
-          tagName: target.tagName,
-          name: tweenName,
-          duration,
-          delay,
-          timingFunction: vars.ease || 'power1.out',
-          iterationCount: vars.repeat === -1 ? 'infinite' : (vars.repeat || 0) + 1,
-          direction: vars.yoyo ? 'alternate' : 'normal',
-          fillMode: 'both',
-          type: 'gsap',
-          keyframes: Object.keys(animatedProps).length > 0 ? [{
-            offset: 0,
-            properties: {},
-            rawCssText: '/* start state */',
-          }, {
-            offset: 1,
-            properties: animatedProps,
-            rawCssText: JSON.stringify(animatedProps),
-          }] : null,
-          keyframesData: null,
-          animationShorthand: `gsap.to(element, { ${Object.entries(animatedProps).map(([k, v]) => `${k}: ${v}`).join(', ')}, duration: ${duration / 1000}s })`,
-          animationLonghand: null,
-          startTime: delay,
-          endTime: delay + duration,
-          position,
-        };
-
-        appendWeaverId(target, gsapAnim.id);
-        existingAnimations.push(gsapAnim);
-      });
-    });
-
-    console.log(`🎨 CSS Weaver: Found ${existingAnimations.filter(a => a.type === 'gsap').length} GSAP animations`);
-  } catch (error) {
-    console.debug('CSS Weaver: GSAP scan failed:', error);
-  }
-}
-
-/**
- * Scans for Framer Motion animations
- * Framer Motion uses data attributes and the Web Animations API under the hood
- */
-function scanFramerMotionAnimations(existingAnimations: Animation[]): void {
-  try {
-    // Check for Framer Motion indicators
-    // Framer Motion adds specific data attributes to animated elements
-    const motionElements = document.querySelectorAll('[data-framer-component-type], [data-framer-name], [style*="--framer"], [data-motion-pop-id]');
-
-    if (motionElements.length === 0) {
-      // Check if React and Framer Motion are loaded
-      const hasFramerMotion = (window as any).__FRAMER_MOTION__ ||
-                              (window as any).MotionConfig ||
-                              document.querySelector('[data-projection-id]');
-
-      if (!hasFramerMotion) {
-        console.debug('CSS Weaver: Framer Motion not detected on this page');
-        return;
-      }
-    }
-
-    console.log('🎨 CSS Weaver: Framer Motion detected, scanning animations...');
-
-    // Find elements with Framer Motion's projection system (used for layout animations)
-    const projectionElements = document.querySelectorAll('[data-projection-id]');
-
-    projectionElements.forEach((element) => {
-      if (!(element instanceof HTMLElement)) return;
-      if (element.dataset.cssWeaverId) return; // Skip if already processed
-
-      const rect = element.getBoundingClientRect();
-      const position = {
-        top: rect.top + window.scrollY,
-        bottom: rect.top + window.scrollY + rect.height,
-        height: rect.height,
-      };
-
-      // Try to extract animation info from computed styles
-      const computed = getComputedStyle(element);
-      const transform = computed.transform;
-      const opacity = computed.opacity;
-
-      const framerAnim: Animation = {
-        id: generateId(),
-        selector: getSelector(element),
-        tagName: element.tagName,
-        name: `framer: layout animation`,
-        duration: 300, // Default Framer Motion duration
-        delay: 0,
-        timingFunction: 'ease-out',
-        iterationCount: 1,
-        direction: 'normal',
-        fillMode: 'both',
-        type: 'framer-motion',
-        keyframes: [{
-          offset: 0,
-          properties: { transform: 'none', opacity: '0' },
-          rawCssText: '/* initial state */',
-        }, {
-          offset: 1,
-          properties: {
-            transform: transform !== 'none' ? transform : 'none',
-            opacity: opacity,
-          },
-          rawCssText: `transform: ${transform}; opacity: ${opacity};`,
-        }],
-        keyframesData: null,
-        animationShorthand: `<motion.div animate={{ ... }} />`,
-        animationLonghand: null,
-        startTime: 0,
-        endTime: 300,
-        position,
-      };
-
-      appendWeaverId(element, framerAnim.id);
-      existingAnimations.push(framerAnim);
-    });
-
-    // Also look for Framer-specific data attributes
-    const framerElements = document.querySelectorAll('[data-framer-component-type], [data-framer-name]');
-    framerElements.forEach((element) => {
-      if (!(element instanceof HTMLElement)) return;
-      if (element.dataset.cssWeaverId) return;
-
-      const rect = element.getBoundingClientRect();
-      const position = {
-        top: rect.top + window.scrollY,
-        bottom: rect.top + window.scrollY + rect.height,
-        height: rect.height,
-      };
-
-      const componentType = element.dataset.framerComponentType || element.dataset.framerName || 'component';
-
-      const framerAnim: Animation = {
-        id: generateId(),
-        selector: getSelector(element),
-        tagName: element.tagName,
-        name: `framer: ${componentType}`,
-        duration: 300,
-        delay: 0,
-        timingFunction: 'ease-out',
-        iterationCount: 1,
-        direction: 'normal',
-        fillMode: 'both',
-        type: 'framer-motion',
-        keyframes: null,
-        keyframesData: null,
-        animationShorthand: `<motion.${element.tagName.toLowerCase()} />`,
-        animationLonghand: null,
-        startTime: 0,
-        endTime: 300,
-        position,
-      };
-
-      appendWeaverId(element, framerAnim.id);
-      existingAnimations.push(framerAnim);
-    });
-
-    console.log(`🎨 CSS Weaver: Found ${existingAnimations.filter(a => a.type === 'framer-motion').length} Framer Motion animations`);
-  } catch (error) {
-    console.debug('CSS Weaver: Framer Motion scan failed:', error);
-  }
-}
+// Note: scanGSAPAnimations and scanFramerMotionAnimations removed
+// These functions tried to access window.gsap and window.__FRAMER_MOTION__ from the content script's isolated world
+// which doesn't work. GSAP/Framer detection now happens via pageScript.js → CustomEvent → animationCache.ts
 
 /**
  * Collects all @keyframes rules from stylesheets
@@ -685,55 +464,7 @@ function splitCSSValues(value: string): string[] {
   return result;
 }
 
-/**
- * Generate a unique CSS selector for an element
- */
-function getSelector(element: HTMLElement): string {
-  // Try ID first
-  if (element.id) {
-    return `#${element.id}`;
-  }
-
-  // Build a path
-  const path: string[] = [];
-  let current: HTMLElement | null = element;
-
-  while (current && current !== document.body && path.length < 4) {
-    let selector = current.tagName.toLowerCase();
-
-    // Add class if available
-    if (current.className && typeof current.className === 'string') {
-      const classes = current.className.trim().split(/\s+/).filter(Boolean);
-      if (classes.length > 0) {
-        // Use first meaningful class (skip utility classes)
-        const meaningfulClass = classes.find(
-          (c) => !c.match(/^(w-|h-|p-|m-|flex|grid|text-|bg-|border)/)
-        );
-        if (meaningfulClass) {
-          selector += `.${meaningfulClass}`;
-        } else if (classes[0]) {
-          selector += `.${classes[0]}`;
-        }
-      }
-    }
-
-    // Add nth-child if needed for uniqueness
-    if (current.parentElement) {
-      const siblings = Array.from(current.parentElement.children).filter(
-        (el) => el.tagName === current!.tagName
-      );
-      if (siblings.length > 1) {
-        const index = siblings.indexOf(current) + 1;
-        selector += `:nth-child(${index})`;
-      }
-    }
-
-    path.unshift(selector);
-    current = current.parentElement;
-  }
-
-  return path.join(' > ');
-}
+// getSelector imported from ../utils/getSelector.ts
 
 /**
  * Generate a unique ID
@@ -824,14 +555,7 @@ function buildTreeNode(
   }
 
   // Build class list (filter utility classes for cleaner display)
-  const classList = element.className && typeof element.className === 'string'
-    ? element.className
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean)
-        .filter((c) => !c.match(/^(w-|h-|p-|m-|flex|grid|text-|bg-|border)/))
-        .slice(0, 3) // Limit to 3 classes for display
-    : [];
+  const classList = getMeaningfulClasses(element, 3);
 
   return {
     id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

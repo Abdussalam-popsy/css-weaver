@@ -19,21 +19,8 @@ const colors = {
   textDim: '#6b7280',
 };
 
-/**
- * Open the full timeline panel in a new tab
- */
-function openTimelinePanel(): void {
-  // Get the current page URL to pass to the panel
-  const currentUrl = window.location.href;
-
-  // Send message to background to open panel tab
-  chrome.runtime.sendMessage({
-    type: 'OPEN_TIMELINE_PANEL',
-    payload: { sourceUrl: currentUrl },
-  });
-
-  console.log('🎨 CSS Weaver: Opening timeline panel for', currentUrl);
-}
+// Note: Timeline panel removed for v2 MVP
+// The full timeline panel code is preserved in src/panel/ for future v2.1
 
 /**
  * Create or get the Shadow DOM container for the floating panel
@@ -184,9 +171,10 @@ export function showFloatingPanel(): void {
 
   // Create React root and render
   root = createRoot(mountPoint);
+  // Note: Timeline panel disabled for v2 MVP - keeping files for future v2.1
   root.render(
-    <FloatingPanel onClose={hideFloatingPanel} onOpenTimeline={openTimelinePanel}>
-      <FloatingApp onClose={hideFloatingPanel} onOpenTimeline={openTimelinePanel} />
+    <FloatingPanel onClose={hideFloatingPanel}>
+      <FloatingApp onClose={hideFloatingPanel} />
     </FloatingPanel>
   );
 

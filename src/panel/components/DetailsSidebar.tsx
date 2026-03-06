@@ -11,71 +11,18 @@ import {
   getCompleteCodeWithHtml,
 } from '../utils/cssFormatting';
 import type { Animation } from '../../shared/types';
+import { getTypeLabel, getTypeBadgeClass, getTypeFullLabel } from '../../constants/animationTypes';
+import EasingCurve from '../../components/EasingCurve';
 
 /**
  * Get the code section title based on animation type
  */
 function getCodeSectionTitle(type: Animation['type']): string {
-  switch (type) {
-    case 'animation':
-      return 'CSS';
-    case 'transition':
-      return 'Transition';
-    case 'gsap':
-      return 'GSAP';
-    case 'web-animation':
-      return 'Web Animation API';
-    case 'framer-motion':
-      return 'Framer Motion';
-    case 'scroll-driven':
-      return 'Scroll-Driven CSS';
-    default:
-      return 'Code';
-  }
-}
-
-/**
- * Get the display label for animation type
- */
-function getTypeLabel(type: Animation['type']): string {
-  switch (type) {
-    case 'animation':
-      return 'Keyframes';
-    case 'transition':
-      return 'Transition';
-    case 'gsap':
-      return 'GSAP';
-    case 'web-animation':
-      return 'Web API';
-    case 'framer-motion':
-      return 'Framer';
-    case 'scroll-driven':
-      return 'Scroll';
-    default:
-      return type;
-  }
-}
-
-/**
- * Get Tailwind classes for animation type badge
- */
-function getTypeBadgeClass(type: Animation['type']): string {
-  switch (type) {
-    case 'animation':
-      return 'bg-weaver-accent/20 text-weaver-accent';
-    case 'transition':
-      return 'bg-blue-500/20 text-blue-400';
-    case 'gsap':
-      return 'bg-green-600/20 text-green-400';
-    case 'web-animation':
-      return 'bg-yellow-500/20 text-yellow-400';
-    case 'framer-motion':
-      return 'bg-pink-500/20 text-pink-400';
-    case 'scroll-driven':
-      return 'bg-purple-500/20 text-purple-400';
-    default:
-      return 'bg-gray-500/20 text-gray-400';
-  }
+  // Use full label for code section title
+  const fullLabel = getTypeFullLabel(type);
+  if (type === 'animation') return 'CSS';
+  if (type === 'scroll-driven') return 'Scroll-Driven CSS';
+  return fullLabel;
 }
 
 /**
@@ -257,9 +204,21 @@ export default function DetailsSidebar() {
 
       {/* Scrollable content area */}
       <div className="flex-1 overflow-auto">
-        {/* Quick stats - more compact horizontal layout */}
-        <div className="px-3 py-2 border-b border-weaver-border">
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        {/* Quick stats with easing curve */}
+        <div className="px-3 py-2 border-b border-weaver-border flex gap-3">
+          {/* Easing curve visualization */}
+          <div className="shrink-0">
+            <EasingCurve
+              easing={animation.timingFunction}
+              width={64}
+              height={64}
+              showHandles={true}
+              showLinear={true}
+            />
+          </div>
+
+          {/* Timing stats */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs items-start content-start flex-1">
             <div>
               <span className="text-gray-500">Duration: </span>
               <span className="text-gray-300">{animation.duration}ms</span>
@@ -270,7 +229,7 @@ export default function DetailsSidebar() {
             </div>
             <div>
               <span className="text-gray-500">Easing: </span>
-              <span className="text-gray-300">{animation.timingFunction}</span>
+              <span className="text-gray-300 font-mono text-[10px]">{animation.timingFunction}</span>
             </div>
             {animation.type === 'animation' && (
               <div>

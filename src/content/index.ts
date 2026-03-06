@@ -20,7 +20,8 @@ import {
   getPlaybackState,
   cleanup as cleanupAnimationController,
 } from './animationController';
-import { inspectGSAP, controlGSAP, getGSAPState, type GSAPTweenData } from './gsapInspector';
+// GSAP control removed - gsapInspector.ts tried to access window.gsap from isolated world (won't work)
+// GSAP detection now happens entirely through pageScript.js → CustomEvent → animationCache.ts
 import type { Animation } from '../shared/types';
 import type { ContentScriptMessage, ContentScriptResponse } from '../shared/messages';
 import {
@@ -31,9 +32,6 @@ import {
 } from './animationCache';
 
 console.log('🎨 CSS Weaver: Imports loaded successfully');
-
-// Store GSAP inspection data
-let cachedGSAPData: GSAPTweenData[] = [];
 
 /**
  * Initialize page script injection for GSAP/library detection
@@ -121,18 +119,10 @@ function startPlaybackSync() {
 
   playbackSyncInterval = window.setInterval(() => {
     const state = getPlaybackState();
-    const gsapState = getGSAPState();
-
-    // Merge states
-    const combinedState = {
-      isPlaying: state.isPlaying || (gsapState?.isPlaying ?? false),
-      currentTime: Math.max(state.currentTime, gsapState?.currentTime ?? 0),
-      totalDuration: Math.max(state.totalDuration, gsapState?.totalDuration ?? 0),
-    };
 
     chrome.runtime.sendMessage({
       type: 'PLAYBACK_STATE_UPDATE',
-      payload: combinedState,
+      payload: state,
     }).catch(() => {
       // Panel might not be listening
     });
@@ -195,9 +185,6 @@ chrome.runtime.onMessage.addListener(
               // Store in shared cache
               setCachedAnimations(allAnimations);
 
-              // Also do deep GSAP inspection
-              cachedGSAPData = inspectGSAP();
-
               // Initialize animation control
               initializeAnimationControl();
 
@@ -214,7 +201,6 @@ chrome.runtime.onMessage.addListener(
               console.log('🎨 CSS Weaver: Scan complete', {
                 cssAnimations: cssAnimations.length,
                 pageDetected: pageAnims.length,
-                gsapInspected: cachedGSAPData.length,
                 total: allAnimations.length,
               });
 
@@ -303,23 +289,19 @@ chrome.runtime.onMessage.addListener(
         switch (action) {
           case 'play':
             playAllAnimations();
-            controlGSAP('play');
             startPlaybackSync();
             break;
           case 'pause':
             pauseAllAnimations();
-            controlGSAP('pause');
             stopPlaybackSync();
             break;
           case 'restart':
             restartAllAnimations();
-            controlGSAP('restart');
             startPlaybackSync();
             break;
           case 'seek':
             if (value !== undefined) {
               seekAllAnimations(value);
-              controlGSAP('seek', value);
             }
             break;
           case 'speed':
@@ -337,29 +319,13 @@ chrome.runtime.onMessage.addListener(
         break;
       }
 
-      // Get GSAP inspection data
-      case 'GET_GSAP_DATA': {
-        console.log('🔍 CSS Weaver: Getting GSAP data');
-        cachedGSAPData = inspectGSAP();
-        sendResponse({
-          type: 'GSAP_DATA_RESULT',
-          payload: cachedGSAPData,
-        } as any);
-        break;
-      }
-
       // Get current playback state
       case 'GET_PLAYBACK_STATE': {
         const state = getPlaybackState();
-        const gsapState = getGSAPState();
 
         sendResponse({
           type: 'PLAYBACK_STATE_RESULT',
-          payload: {
-            isPlaying: state.isPlaying || (gsapState?.isPlaying ?? false),
-            currentTime: Math.max(state.currentTime, gsapState?.currentTime ?? 0),
-            totalDuration: Math.max(state.totalDuration, gsapState?.totalDuration ?? 0),
-          },
+          payload: state,
         } as any);
         break;
       }
