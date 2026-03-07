@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Animation, ElementContext, ElementNode, CSSCategory } from '../../shared/types';
-import { scanAnimations } from '../scanner';
-import { highlightElement, clearHighlight } from '../highlighter';
+import { scanAnimations, captureElementContext } from '../scanner';
+import { highlightElement, highlightAnyElement, clearHighlight } from '../highlighter';
 import { getCachedAnimations, hasCachedAnimations, setCachedAnimations, getPageDetectedAnimations } from '../animationCache';
 import { requestPageScan } from '../injected/inject';
 import { formatAnimationProperty, getCompleteCss } from '../../panel/utils/cssFormatting';
@@ -511,6 +511,9 @@ export default function FloatingApp({
   const setInspectModeEnabled = onInspectModeChange || setInspectModeEnabledInternal;
   const [inspectTooltipAnims, setInspectTooltipAnims] = useState<Animation[]>([]);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  // Hover mode state for live panel sync
+  const [hoveredElementContext, setHoveredElementContext] = useState<ElementContext | null>(null);
+  const [hoveredElementTag, setHoveredElementTag] = useState<string>('');
 
   // Scan animations on mount
   useEffect(() => {
@@ -546,6 +549,8 @@ export default function FloatingApp({
   useEffect(() => {
     if (!inspectModeEnabled) {
       setInspectTooltipAnims([]);
+      setHoveredElementContext(null);
+      setHoveredElementTag('');
       return;
     }
 
@@ -553,23 +558,46 @@ export default function FloatingApp({
       const target = e.target as HTMLElement;
       if (target.closest('#css-weaver-floating-root')) {
         setInspectTooltipAnims([]);
+        clearHighlight();
         return;
       }
 
-      const animatedEl = target.closest('[data-css-weaver-id]') as HTMLElement;
+      // Find the actual element to highlight (skip tiny/invisible elements)
+      let elementToHighlight: HTMLElement | null = target;
+      while (elementToHighlight && elementToHighlight !== document.body) {
+        const rect = elementToHighlight.getBoundingClientRect();
+        if (rect.width > 10 && rect.height > 10) break;
+        elementToHighlight = elementToHighlight.parentElement as HTMLElement;
+      }
+
+      if (!elementToHighlight || elementToHighlight === document.body) {
+        clearHighlight();
+        setInspectTooltipAnims([]);
+        setHoveredElementContext(null);
+        return;
+      }
+
+      // Always highlight the hovered element
+      highlightAnyElement(elementToHighlight);
+      setTooltipPosition({ x: e.clientX, y: e.clientY });
+
+      // Capture element context for live panel sync
+      const context = captureElementContext(elementToHighlight);
+      setHoveredElementContext(context);
+      setHoveredElementTag(elementToHighlight.tagName.toLowerCase());
+
+      // Check if it (or an ancestor) has animations
+      const animatedEl = elementToHighlight.closest('[data-css-weaver-id]') as HTMLElement;
       if (animatedEl) {
         const animIds = animatedEl.dataset.cssWeaverId?.split(',') || [];
         const matchedAnims = animations.filter(a => animIds.includes(a.id));
         if (matchedAnims.length > 0) {
           setInspectTooltipAnims(matchedAnims);
-          setTooltipPosition({ x: e.clientX, y: e.clientY });
-          highlightElement(matchedAnims[0].id);
         } else {
           setInspectTooltipAnims([]);
         }
       } else {
         setInspectTooltipAnims([]);
-        if (!selectedId) clearHighlight();
       }
     };
 
@@ -1134,9 +1162,144 @@ export default function FloatingApp({
         )}
       </div>
 
-      {/* Selected animation details */}
+      {/* Details panel - shows for selected animation OR hovered element in inspect mode */}
       <div style={styles.details}>
-        {selectedAnimation && (
+        {/* Inspect mode: show hovered element context */}
+        {inspectModeEnabled && hoveredElementContext && (
+          <div style={styles.detailsInner}>
+            <div style={{
+              padding: '8px 12px',
+              background: colors.accent.muted,
+              borderBottom: `1px solid ${colors.border.default}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.accent.primary} strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="22" y1="12" x2="18" y2="12" />
+                <line x1="6" y1="12" x2="2" y2="12" />
+                <line x1="12" y1="6" x2="12" y2="2" />
+                <line x1="12" y1="22" x2="12" y2="18" />
+              </svg>
+              <span style={{ color: colors.accent.primary, fontWeight: typography.fontWeight.medium, fontSize: typography.fontSize.sm }}>
+                Inspecting: &lt;{hoveredElementTag}&gt;
+              </span>
+              {inspectTooltipAnims.length > 0 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  background: colors.success.muted,
+                  color: colors.success.primary,
+                  padding: '2px 6px',
+                  borderRadius: radius.sm,
+                  fontSize: typography.fontSize.xs,
+                }}>
+                  {inspectTooltipAnims.length} animation{inspectTooltipAnims.length > 1 ? 's' : ''}
+                </span>
+              )}
+              {inspectTooltipAnims.length === 0 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  color: colors.text.tertiary,
+                  fontSize: typography.fontSize.xs,
+                }}>
+                  No animations
+                </span>
+              )}
+            </div>
+            <div style={styles.tabs}>
+              <button
+                style={styles.tab(activeTab === 'html')}
+                onClick={() => setActiveTab('html')}
+              >
+                HTML
+              </button>
+              <button
+                style={styles.tab(activeTab === 'styles')}
+                onClick={() => setActiveTab('styles')}
+              >
+                Styles
+              </button>
+              {inspectTooltipAnims.length > 0 && (
+                <>
+                  <button
+                    style={styles.tab(activeTab === 'overview')}
+                    onClick={() => setActiveTab('overview')}
+                  >
+                    Animation
+                  </button>
+                  <button
+                    style={styles.tab(activeTab === 'code')}
+                    onClick={() => setActiveTab('code')}
+                  >
+                    Code
+                  </button>
+                </>
+              )}
+            </div>
+
+            {activeTab === 'html' && (
+              <HTMLStructureTab
+                context={hoveredElementContext}
+                onCopy={(text) => handleCopy(text, 'hover-html')}
+              />
+            )}
+
+            {activeTab === 'styles' && (
+              <ComputedStylesTab
+                context={hoveredElementContext}
+                onCopy={(text) => handleCopy(text, 'hover-styles')}
+              />
+            )}
+
+            {activeTab === 'overview' && inspectTooltipAnims.length > 0 && (
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ flexShrink: 0 }}>
+                  <EasingCurve
+                    easing={inspectTooltipAnims[0].timingFunction}
+                    width={80}
+                    height={80}
+                    showHandles={true}
+                    showLinear={true}
+                  />
+                </div>
+                <div style={{ ...styles.detailGrid, flex: 1 }}>
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Duration</div>
+                    <div style={styles.detailValue}>{formatDuration(inspectTooltipAnims[0].duration)}</div>
+                  </div>
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Delay</div>
+                    <div style={styles.detailValue}>{formatDuration(inspectTooltipAnims[0].delay)}</div>
+                  </div>
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Iterations</div>
+                    <div style={styles.detailValue}>
+                      {inspectTooltipAnims[0].iterationCount === 'infinite' ? '∞' : inspectTooltipAnims[0].iterationCount}
+                    </div>
+                  </div>
+                  <div style={styles.detailCard}>
+                    <div style={styles.detailLabel}>Easing</div>
+                    <div style={{ ...styles.detailValue, fontSize: typography.fontSize.sm }}>
+                      {formatTiming(inspectTooltipAnims[0].timingFunction)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'code' && inspectTooltipAnims.length > 0 && (
+              <div style={styles.codeBlock}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                  {formatAnimationProperty(inspectTooltipAnims[0])}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Normal mode: show selected animation */}
+        {!inspectModeEnabled && selectedAnimation && (
           <div style={styles.detailsInner}>
             <div style={styles.tabs}>
               <button

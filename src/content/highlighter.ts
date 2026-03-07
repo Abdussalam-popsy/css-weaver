@@ -70,6 +70,13 @@ export function highlightElement(animationId: string): void {
     return;
   }
 
+  highlightAnyElement(element);
+}
+
+/**
+ * Highlight any arbitrary DOM element (for inspect mode)
+ */
+export function highlightAnyElement(element: HTMLElement): void {
   const overlay = ensureOverlay();
   const rect = element.getBoundingClientRect();
 
@@ -79,10 +86,6 @@ export function highlightElement(animationId: string): void {
   overlay.style.width = `${rect.width + 4}px`;
   overlay.style.height = `${rect.height + 4}px`;
   overlay.style.opacity = '1';
-
-  // Also add a temporary outline to the element itself for extra visibility
-  element.style.outline = '2px solid #22c55e';
-  element.style.outlineOffset = '2px';
 }
 
 /**
